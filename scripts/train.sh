@@ -11,5 +11,5 @@ DATASET_ID=1
 # 1) Plan and preprocess (use -np 1 for less load)
 nnUNetv2_plan_and_preprocess -d "$DATASET_ID" -np 1
 
-# 2) Train 3D full resolution, fold 0
-nnUNetv2_train "$DATASET_ID" 3d_fullres 0
+# 2) Train 2D (less RAM than 3d_fullres), 50 epochs
+nnUNetv2_train "$DATASET_ID" 2d 0 -tr nnUNetTrainer_50epochs
