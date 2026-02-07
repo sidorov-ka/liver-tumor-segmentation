@@ -1,0 +1,48 @@
+# Virtual env
+.venv/
+venv/
+env/
+.env
+# API-ключи и секреты не коммитить
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Data
+data/raw/
+data/interim/
+data/processed/
+!data/README.md
+
+# nnU-Net artifacts
+nnUNet_raw/*
+!nnUNet_raw/.gitkeep
+nnUNet_preprocessed/*
+!nnUNet_preprocessed/.gitkeep
+nnUNet_results/*
+!nnUNet_results/.gitkeep
+
+# Medical imaging
+*.nii
+*.nii.gz
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Weights
+*.ckpt
+*.pth
+*.pt
