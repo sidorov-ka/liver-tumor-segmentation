@@ -31,6 +31,10 @@ nnUNet_preprocessed/*
 nnUNet_results/*
 !nnUNet_results/.gitkeep
 
+# Refinement stage 2 (metrics/checkpoints; same idea as nnUNet_results but separate tree)
+refinement_results/*
+!refinement_results/.gitkeep
+
 # Medical imaging
 *.nii
 *.nii.gz
