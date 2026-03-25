@@ -1,15 +1,21 @@
-#!/bin/bash
-# nnU-Net v2 training for Dataset001_LiverTumor.
-# Sets nnUNet_* env vars from repo if not already set.
-cd "$(dirname "$0")/.."
-export nnUNet_raw="${nnUNet_raw:-$PWD/nnUNet_raw}"
-export nnUNet_preprocessed="${nnUNet_preprocessed:-$PWD/nnUNet_preprocessed}"
-export nnUNet_results="${nnUNet_results:-$PWD/nnUNet_results}"
+#!/usr/bin/env bash
+# Train Dataset001_LiverTumor with nnU-Net v2: plan, preprocess (2d), then train fold 0.
+set -euo pipefail
 
-DATASET_ID=1
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPO_ROOT}"
 
-# 1) Plan and preprocess (use -np 1 for less load)
-nnUNetv2_plan_and_preprocess -d "$DATASET_ID" -np 1
+export nnUNet_raw="${nnUNet_raw:-${REPO_ROOT}/nnUNet_raw}"
+export nnUNet_preprocessed="${nnUNet_preprocessed:-${REPO_ROOT}/nnUNet_preprocessed}"
+export nnUNet_results="${nnUNet_results:-${REPO_ROOT}/nnUNet_results}"
 
-# 2) Train 2D (less RAM than 3d_fullres), 50 epochs
-nnUNetv2_train "$DATASET_ID" 2d 0 -tr nnUNetTrainer_50epochs
+readonly DATASET_ID=1
+readonly CONFIGURATION="2d"
+readonly FOLD=0
+readonly TRAINER="nnUNetTrainer_100epochs"
+
+# Single-process preprocessing to limit RAM; --clean rebuilds after raw data changes.
+nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" --clean
+
+# -p is plans identifier, not dataloader workers (see nnUNetv2_train --help).
+nnUNetv2_train "${DATASET_ID}" "${CONFIGURATION}" "${FOLD}" -tr "${TRAINER}"

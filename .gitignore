@@ -23,6 +23,7 @@ data/processed/
 !data/README.md
 
 # nnU-Net artifacts
+LiverTumor_backup/
 nnUNet_raw/*
 !nnUNet_raw/.gitkeep
 nnUNet_preprocessed/*
