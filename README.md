@@ -114,7 +114,7 @@ python scripts/train_refiner.py --export-dir refinement_export/slices
   python scripts/infer.py -i <вход> -o <выход> --refinement-dir <папка_рана_с_meta.json_и_checkpoint_best.pth>
   ```
 
-Общие флаги: `--tile-step-size`, `--no-mirroring`, `--fold`, `--model-dir`, `--export-stage1-to` (опционально сохранить stage-1). Справка: `python scripts/infer.py -h`.
+Общие флаги: `--tile-step-size`, `--no-mirroring`, `--fold`, `--model-dir`, `--export-stage1-to` (опционально сохранить stage-1). Для метрик на **валидации** того же fold: `--split val` (список кейсов из `nnUNet_preprocessed/.../splits_final.json`). После OOM или обрыва: тот же `-o` и **`--skip-existing`**, чтобы не пересчитывать готовые кейсы. Справка: `python scripts/infer.py -h`.
 
 ## 5. Метрики на полных объёмах (Dice / IoU опухоли)
 

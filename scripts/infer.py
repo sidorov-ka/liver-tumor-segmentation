@@ -7,6 +7,9 @@ not a separate ``nnUNetv2_predict`` call — defaults (checkpoint, step size, TT
 
 - ``--stage1-only -o DIR``: nnU-Net predictions only (same ``nnUNetPredictor`` + preprocessor as
   the two-stage path).
+- ``--split val`` (or ``train``): only cases listed in ``nnUNet_preprocessed/.../splits_final.json``
+  for ``--fold`` (typical val metrics; input folder is still ``imagesTr`` or a staging dir).
+- ``--skip-existing``: skip cases whose output ``<case_id>.nii.gz`` already exists under ``-o``.
 - Full two-stage: optional ``--export-stage1-to DIR`` writes stage-1 segmentations from the **same**
   forward pass used before refinement.
 
@@ -25,6 +28,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -47,6 +51,52 @@ DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE = "inference_comparison/coarse_to_fine"
 DEFAULT_DATASET_FOLDER = "Dataset001_LiverTumor"
 # Aligned with scripts/export.py nnUNetPredictor
 DEFAULT_TILE_STEP_SIZE = 0.75
+
+
+def _nnunet_preprocessed_default(repo: Path) -> Path:
+    return Path(os.environ.get("nnUNet_preprocessed", str(repo / "nnUNet_preprocessed")))
+
+
+def _seg_nifti_path(out_dir: Path, case_id: str, file_ending: str) -> Path:
+    fe = file_ending if file_ending.startswith(".") else f".{file_ending}"
+    return out_dir / f"{case_id}{fe}"
+
+
+def _filter_by_split(
+    identifiers: list,
+    list_of_lists: list,
+    split: str,
+    fold: int,
+    splits_path: Path,
+    load_json_fn,
+) -> tuple[list, list]:
+    if split == "all":
+        return identifiers, list_of_lists
+    if not splits_path.is_file():
+        raise FileNotFoundError(f"--split {split} requires {splits_path}")
+    splits = load_json_fn(str(splits_path))
+    if fold < 0 or fold >= len(splits):
+        raise IndexError(f"fold {fold} out of range (len(splits)={len(splits)})")
+    key = "train" if split == "train" else "val"
+    allowed = set(splits[fold][key])
+    id_set = set(identifiers)
+    missing_in_input = allowed - id_set
+    if missing_in_input:
+        sample = sorted(missing_in_input)[:15]
+        print(
+            f"WARNING: {len(missing_in_input)} {split} cases not found under -i (skipped): "
+            f"{sample}{'...' if len(missing_in_input) > 15 else ''}"
+        )
+    kept_id: list = []
+    kept_lol: list = []
+    for cid, lol in zip(identifiers, list_of_lists):
+        if cid in allowed:
+            kept_id.append(cid)
+            kept_lol.append(lol)
+    if not kept_id:
+        raise SystemExit(f"No cases left after --split {split}: check -i and splits_final.json.")
+    print(f"--split {split}: running {len(kept_id)} case(s) (fold {fold}).")
+    return kept_id, kept_lol
 
 
 def _resolve_output_root(repo: Path, output_root: str) -> Path:
@@ -110,6 +160,26 @@ def _parse_args() -> argparse.Namespace:
         "Default: Dataset001_LiverTumor 2d run under repo nnUNet_results.",
     )
     p.add_argument("--fold", type=int, default=0)
+    p.add_argument(
+        "--split",
+        type=str,
+        choices=("all", "val", "train"),
+        default="all",
+        help="Use only train or val case IDs from nnUNet_preprocessed/.../splits_final.json for --fold. "
+        "Default `all`: every case found under -i.",
+    )
+    p.add_argument(
+        "--nnunet-preprocessed",
+        type=str,
+        default=None,
+        help="Directory containing <dataset-folder>/splits_final.json (default: $nnUNet_preprocessed or "
+        "<repo>/nnUNet_preprocessed). Used only when --split is val or train.",
+    )
+    p.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip a case if its output segmentation (<case_id>+file_ending) already exists under -o.",
+    )
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
     p.add_argument(
         "--refinement-dir",
@@ -339,7 +409,26 @@ def main() -> None:
         str(in_dir), file_ending, identifiers=identifiers
     )
 
+    pre_root = (
+        _resolve_repo_path(repo, args.nnunet_preprocessed)
+        if args.nnunet_preprocessed
+        else _nnunet_preprocessed_default(repo)
+    )
+    splits_path = pre_root / args.dataset_folder / "splits_final.json"
+    identifiers, list_of_lists = _filter_by_split(
+        list(identifiers),
+        list(list_of_lists),
+        args.split,
+        args.fold,
+        splits_path,
+        load_json,
+    )
+
     for case_id, image_files in zip(identifiers, list_of_lists):
+        out_seg = _seg_nifti_path(out_dir, case_id, file_ending)
+        if args.skip_existing and out_seg.is_file():
+            print(f"skip {case_id} (exists: {out_seg.name})")
+            continue
         data, _seg, props = preprocessor.run_case(
             image_files,
             None,
