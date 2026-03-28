@@ -1,0 +1,13 @@
+{
+  "git.autoRepositoryDetection": true,
+  "git.openRepositoryInParentFolders": "always",
+  "files.watcherExclude": {
+    "**/nnUNet_preprocessed/**": true,
+    "**/nnUNet_raw/**": true,
+    "**/nnUNet_results/**": true,
+    "**/refinement_export/**": true,
+    "**/refinement_results/**": true,
+    "**/inference_comparison/**": true,
+    "**/.venv/**": true
+  }
+}
