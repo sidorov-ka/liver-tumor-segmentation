@@ -116,6 +116,19 @@ python scripts/train_refiner.py --export-dir refinement_export/slices
 
 Общие флаги: `--tile-step-size`, `--no-mirroring`, `--fold`, `--model-dir`, `--export-stage1-to` (опционально сохранить stage-1). Справка: `python scripts/infer.py -h`.
 
+## 5. Метрики на полных объёмах (Dice / IoU опухоли)
+
+После инференса — отдельно, по сравнению с разметкой (те же имена кейсов, что в `labelsTr`):
+
+```bash
+python scripts/evaluate_segmentations.py \
+  --pred-dir <папка_с_предсказаниями> \
+  --gt-dir nnUNet_raw/Dataset001_LiverTumor/labelsTr \
+  --output-json metrics.json
+```
+
+Класс опухоли по умолчанию читается из `dataset.json`; при необходимости: `--tumor-label 2`.
+
 ## Структура репозитория
 
 ```
@@ -130,10 +143,11 @@ liver-tumor-segmentation/
 ├── nnUNet_results/
 ├── refinement_results/   # логи и чекпойнты второй стадии (не в git)
 └── scripts/
-    ├── train.sh          # nnU-Net: план / препроцесс / train
-    ├── export.py         # слайсы + stage-1 для refinement
-    ├── train_refiner.py  # обучение второй стадии
-    └── infer.py          # полный объём: stage 1 или 1+2
+    ├── train.sh                  # nnU-Net: план / препроцесс / train
+    ├── export.py                 # слайсы + stage-1 для refinement
+    ├── train_refiner.py          # обучение второй стадии
+    ├── infer.py                  # полный объём: stage 1 или 1+2
+    └── evaluate_segmentations.py # Dice/IoU опухоли vs labelsTr
 ```
 
 ## Лицензия
