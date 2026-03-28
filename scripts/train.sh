@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Train Dataset001_LiverTumor with nnU-Net v2: plan, preprocess (2d), then train fold 0.
+# Train Dataset001_LiverTumor with nnU-Net v2: plan, preprocess (2d, writes splits_final.json), then train fold 0.
+# Skip heavy preprocessing if cache is already valid: bash scripts/train.sh --skip-preprocess
+# or: SKIP_NNUNET_PREPROCESS=1 bash scripts/train.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,8 +16,20 @@ readonly CONFIGURATION="2d"
 readonly FOLD=0
 readonly TRAINER="nnUNetTrainer_100epochs"
 
-# Single-process preprocessing to limit RAM; --clean rebuilds after raw data changes.
-nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" --clean
+SKIP_PREPROCESS=0
+if [[ "${1:-}" == "--skip-preprocess" ]]; then
+  SKIP_PREPROCESS=1
+fi
+if [[ "${SKIP_NNUNET_PREPROCESS:-0}" == "1" ]]; then
+  SKIP_PREPROCESS=1
+fi
+
+if [[ "${SKIP_PREPROCESS}" -eq 0 ]]; then
+  # Single-process preprocessing to limit RAM; --clean rebuilds after raw data changes.
+  nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" --clean
+else
+  echo "Skipping nnUNetv2_plan_and_preprocess (preprocessed data assumed valid; use after a full preprocess run)."
+fi
 
 # -p is plans identifier, not dataloader workers (see nnUNetv2_train --help).
 nnUNetv2_train "${DATASET_ID}" "${CONFIGURATION}" "${FOLD}" -tr "${TRAINER}"

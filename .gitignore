@@ -35,6 +35,10 @@ nnUNet_results/*
 refinement_results/*
 !refinement_results/.gitkeep
 
+# Stage-2 export cache + full inference comparison trees (large; regenerate from scripts)
+refinement_export/
+inference_comparison/
+
 # Medical imaging
 *.nii
 *.nii.gz
