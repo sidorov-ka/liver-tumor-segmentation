@@ -14,9 +14,9 @@ Experiment roots under ``inference_comparison/``: ``baseline/`` (nnU-Net only),
 ``coarse_to_fine/`` (two-stage coarse-to-fine refiner).
 Set nnUNet_raw, nnUNet_preprocessed, nnUNet_results before running.
 
-Stage-1 ``nnUNetPredictor`` matches ``export_stage1_preds.py`` (tile step 0.5 by default, Gaussian,
+Stage-1 ``nnUNetPredictor`` matches ``scripts/export.py`` (tile step **0.75** by default, Gaussian,
 mirroring). **Host RAM:** two-stage defaults to float16 coarse logits when ``use_coarse_prob``;
-use ``--full-precision-logits`` for float32. Further reduce RAM: ``--tile-step-size 0.75``,
+use ``--full-precision-logits`` for float32. Further reduce RAM: smaller ``--tile-step-size`` or
 ``--no-mirroring``.
 """
 
@@ -45,8 +45,8 @@ DEFAULT_INFERENCE_SUBDIR = "two_stage"
 DEFAULT_OUTPUT_ROOT_BASELINE = "inference_comparison/baseline"
 DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE = "inference_comparison/coarse_to_fine"
 DEFAULT_DATASET_FOLDER = "Dataset001_LiverTumor"
-# Aligned with scripts/export_stage1_preds.py nnUNetPredictor
-DEFAULT_TILE_STEP_SIZE = 0.5
+# Aligned with scripts/export.py nnUNetPredictor
+DEFAULT_TILE_STEP_SIZE = 0.75
 
 
 def _resolve_output_root(repo: Path, output_root: str) -> Path:
@@ -139,8 +139,8 @@ def _parse_args() -> argparse.Namespace:
         "--tile-step-size",
         type=float,
         default=DEFAULT_TILE_STEP_SIZE,
-        help="nnU-Net sliding-window step (default matches export_stage1_preds.py). "
-        "Larger values (e.g. 0.75) reduce peak host RAM during stage 1.",
+        help="nnU-Net sliding-window step (default 0.75; same as export.py). "
+        "Larger values reduce peak host RAM during stage 1.",
     )
     p.add_argument(
         "--no-mirroring",
@@ -313,7 +313,7 @@ def main() -> None:
     tumor_label = _tumor_label(dataset_json)
     file_ending = dataset_json["file_ending"]
 
-    # Match export_stage1_preds.py (same stage-1 stack as refinement export).
+    # Match scripts/export.py (same stage-1 stack as refinement export).
     predictor = nnUNetPredictor(
         tile_step_size=float(args.tile_step_size),
         use_gaussian=True,

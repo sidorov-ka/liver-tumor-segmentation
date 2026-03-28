@@ -28,7 +28,7 @@ def _parse_args() -> argparse.Namespace:
         "--export-dir",
         type=str,
         required=True,
-        help="Directory with train/ and val/ .npz from export_stage1_preds.py",
+        help="Directory with train/ and val/ .npz from scripts/export.py",
     )
     p.add_argument(
         "--out-dir",
@@ -77,10 +77,10 @@ def main() -> None:
         max_train=args.max_train,
     )
     if len(train_ds) == 0:
-        raise ValueError("train/ has no .npz files — run export_stage1_preds.py first.")
+        raise ValueError("train/ has no .npz files — run scripts/export.py first.")
     if len(val_ds) == 0:
         raise ValueError(
-            "val/ has no .npz files. Run export_stage1_preds.py with nnU-Net splits_final.json "
+            "val/ has no .npz files. Run scripts/export.py with nnU-Net splits_final.json "
             "so validation cases are exported, or add val slices manually."
         )
 

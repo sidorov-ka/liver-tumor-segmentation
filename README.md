@@ -80,7 +80,10 @@ liver-tumor-segmentation/
 ├── nnUNet_preprocessed/
 ├── nnUNet_results/
 └── scripts/
-    └── train.sh
+    ├── train.sh          # nnU-Net plan / preprocess / train
+    ├── export.py         # stage-1 nnU-Net slices for refinement (tile step 0.75)
+    ├── train_refiner.py  # stage-2 refinement U-Net
+    └── infer.py          # full-volume nnU-Net ± refiner (default step 0.75)
 ```
 
 ## License

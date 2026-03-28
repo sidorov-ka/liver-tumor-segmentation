@@ -42,7 +42,7 @@ def _resize_pair(
 
 class RefinementSliceDataset(Dataset):
     """
-    Reads .npz files produced by export_stage1_preds.py.
+    Reads .npz files produced by scripts/export.py.
 
     Each sample:
       input: (C, H, W) — image + coarse (+ optional prob)

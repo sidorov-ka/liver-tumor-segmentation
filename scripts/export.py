@@ -3,6 +3,7 @@
 Export nnU-Net stage-1 predictions + paired preprocessed slices for refinement training.
 
 Uses the same preprocessing as training so tensors align with nnU-Net logits.
+Default sliding-window step matches ``scripts/infer.py`` (0.75) for a consistent baseline.
 """
 
 from __future__ import annotations
@@ -19,6 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from refinement.dataset import save_manifest_json  # noqa: E402
+
+# Same default as scripts/infer.py (nnUNetPredictor tile_step_size)
+DEFAULT_TILE_STEP_SIZE = 0.75
 
 
 def _parse_args() -> argparse.Namespace:
@@ -70,6 +74,12 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default="cuda",
         choices=("cuda", "cpu", "mps"),
+    )
+    p.add_argument(
+        "--tile-step-size",
+        type=float,
+        default=DEFAULT_TILE_STEP_SIZE,
+        help="nnU-Net sliding-window step (default 0.75; same as infer.py).",
     )
     return p.parse_args()
 
@@ -140,7 +150,7 @@ def main() -> None:
         device = torch.device("cpu")
 
     predictor = nnUNetPredictor(
-        tile_step_size=0.5,
+        tile_step_size=float(args.tile_step_size),
         use_gaussian=True,
         use_mirroring=True,
         perform_everything_on_device=device.type == "cuda",
@@ -219,6 +229,7 @@ def main() -> None:
             "model_dir": str(model_dir),
             "fold": args.fold,
             "checkpoint": args.checkpoint,
+            "tile_step_size": float(args.tile_step_size),
             "dataset_folder": args.dataset_folder,
             "train_cases": len(train_cases),
             "val_cases": len(val_cases),
