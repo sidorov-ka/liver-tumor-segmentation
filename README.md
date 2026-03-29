@@ -41,8 +41,8 @@ nnUNet_raw/Dataset001_LiverTumor/
 
 1. **nnU-Net** — планирование, препроцесс, обучение fold 0 (`scripts/train.sh`).
 2. **Export** — слайсы с предсказанием stage-1 и GT для вторых стадий (`scripts/export.py`; общий экспорт для coarse_to_fine и multiview).
-3. **coarse_to_fine** — обучение второй стадии (`scripts/train_coarse_to_fine.py` → `coarse_to_fine_results/...`).
-4. **multiview** — обучение `MultiviewUNet2d` (`scripts/train_multiview.py` → `multiview_results/.../multiview/run_*`).
+3. **coarse_to_fine** — вторая стадия (`scripts/train_coarse_to_fine.sh` или `train_coarse_to_fine.py` → `coarse_to_fine_results/...`).
+4. **multiview** — вторая стадия (`scripts/train_multiview.sh` или `train_multiview.py` → `multiview_results/.../multiview/run_*`).
 5. **Инференс coarse_to_fine** — полный объём: только nnU-Net или nnU-Net + coarse_to_fine (`scripts/infer_coarse_to_fine.py`).
 6. **Инференс multiview** (опционально) — ROI + multi-window, чекпоинт из `train_multiview` (`scripts/infer_multiview.py --multiview-dir ...`; вывод e.g. `inference_comparison/multiview/`). Не смешивать каталоги с `coarse_to_fine`.
 
@@ -99,7 +99,9 @@ python scripts/export.py --output-dir coarse_to_fine_export/slices
 ## 3. Обучение coarse_to_fine (стадия 2)
 
 ```bash
-python scripts/train_coarse_to_fine.py --export-dir coarse_to_fine_export/slices
+bash scripts/train_coarse_to_fine.sh
+# эквивалентно: python scripts/train_coarse_to_fine.py --export-dir coarse_to_fine_export/slices
+# другой экспорт: EXPORT_DIR=/path/to/slices bash scripts/train_coarse_to_fine.sh
 ```
 
 По умолчанию логи и чекпойнты пишутся под  
@@ -114,10 +116,12 @@ python scripts/train_coarse_to_fine.py --export-dir coarse_to_fine_export/slices
 
 ## 4. Обучение multiview (MultiviewUNet2d)
 
-Тот же `--export-dir`, что и для coarse_to_fine (раздел 2). Четыре входных канала: три HU-окна (`multiview.config`) + вероятность опухоли nnU-Net; выравнивание с инференсом — `infer_multiview` читает `hu_windows`, `crop_size`, `base` и пр. из `meta.json` рана.
+Тот же `--export-dir`, что и для coarse_to_fine (раздел 2). Четыре входных канала: три HU-окна (`multiview.config`) + вероятность опухоли nnU-Net. По умолчанию **`--roi-mode infer`**: кроп на срезе строится по **той же «подозрительной» полосе** `[prob_lo, prob_hi]`, что и на инференсе, с паддингами `roi_pad` / `min_roi_side` (ось Y/X); слайсы **без** таких пикселей из датасета отбрасываются. Для старого варианта (ROI = GT∪coarse): `--roi-mode legacy`. `infer_multiview` читает `hu_windows`, `crop_size`, `base` и пр. из `meta.json`.
 
 ```bash
-python scripts/train_multiview.py --export-dir coarse_to_fine_export/slices
+bash scripts/train_multiview.sh
+# эквивалентно: python scripts/train_multiview.py --export-dir coarse_to_fine_export/slices
+# другой экспорт: EXPORT_DIR=/path/to/slices bash scripts/train_multiview.sh
 ```
 
 По умолчанию логи и чекпоинты: `multiview_results/<dataset>/fold_<n>/multiview/run_<timestamp>/`  
@@ -182,7 +186,9 @@ liver-tumor-segmentation/
 ├── coarse_to_fine_results/   # только coarse_to_fine (чекпойнты и логи)
 ├── multiview_results/        # только multiview / MultiviewUNet2d (не в git)
 └── scripts/
-    ├── train.sh                  # nnU-Net: план / препроцесс / train
+    ├── train.sh                  # стадия 1: nnU-Net план / препроцесс / train
+    ├── train_coarse_to_fine.sh   # обёртка над train_coarse_to_fine.py (EXPORT_DIR)
+    ├── train_multiview.sh        # обёртка над train_multiview.py (EXPORT_DIR)
     ├── export.py                 # слайсы + stage-1 (для train_coarse_to_fine / train_multiview)
     ├── train_coarse_to_fine.py   # обучение coarse_to_fine
     ├── train_multiview.py        # обучение MultiviewUNet2d

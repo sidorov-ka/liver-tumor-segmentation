@@ -68,9 +68,17 @@ def _parse_args() -> argparse.Namespace:
         help="Use binary coarse_tumor as 4th channel instead of coarse_tumor_prob.",
     )
     p.add_argument(
+        "--roi-mode",
+        type=str,
+        choices=("infer", "legacy"),
+        default="infer",
+        help="infer: ROI = suspicious prob band + pad (matches infer_multiview). "
+        "legacy: ROI = GT∪coarse (old behavior).",
+    )
+    p.add_argument(
         "--no-roi-align",
         action="store_true",
-        help="Legacy: resize full slice to crop_size. Default: ROI around GT∪coarse then resize.",
+        help="Ignore ROI; resize full slice to crop_size (debug / legacy).",
     )
     p.add_argument(
         "--roi-pad",
@@ -148,23 +156,45 @@ def main() -> None:
     roi_pad_xy = (int(args.roi_pad[0]), int(args.roi_pad[1]))
     min_roi_xy = (int(args.min_roi[0]), int(args.min_roi[1]))
 
+    if args.roi_mode == "infer" and not use_coarse_prob:
+        raise SystemExit(
+            "--roi-mode infer requires coarse_tumor_prob in .npz (omit --no-coarse-prob). "
+            "The suspicious band is defined on softmax tumor probability."
+        )
+
     train_ds, val_ds = build_multiview_datasets(
         export_dir,
         mv_cfg,
         crop_size=crop_size,
         use_coarse_prob=use_coarse_prob,
         roi_aligned=roi_aligned,
+        roi_mode=args.roi_mode,
         roi_pad_xy=roi_pad_xy,
         min_roi_xy=min_roi_xy,
         max_train=args.max_train,
     )
     if len(train_ds) == 0:
-        raise ValueError("train/ has no .npz files — run scripts/export.py first.")
+        hint = ""
+        if args.roi_mode == "infer" and roi_aligned:
+            hint = (
+                " With --roi-mode infer, train/ must contain slices where tumor prob is in "
+                f"[{mv_cfg.prob_lo}, {mv_cfg.prob_hi}]. Widen band (--prob-lo/--prob-hi) or use --roi-mode legacy."
+            )
+        raise ValueError("train/ has no usable .npz files — run scripts/export.py first." + hint)
     if len(val_ds) == 0:
+        hint = ""
+        if args.roi_mode == "infer" and roi_aligned:
+            hint = (
+                f" With --roi-mode infer, val/ needs slices with prob in [{mv_cfg.prob_lo}, {mv_cfg.prob_hi}]. "
+                "Try --roi-mode legacy or adjust prob band."
+            )
         raise ValueError(
-            "val/ has no .npz files. Run scripts/export.py with nnU-Net splits_final.json "
-            "so validation cases are exported, or add val slices manually."
+            "val/ has no usable .npz files. Run export with splits_final.json, or add val slices." + hint
         )
+    print(
+        f"Multiview dataset: train={len(train_ds)} val={len(val_ds)} "
+        f"(roi_mode={args.roi_mode}, roi_aligned={roi_aligned})"
+    )
 
     train_loader = DataLoader(
         train_ds,
@@ -196,6 +226,7 @@ def main() -> None:
         "crop_size": list(crop_size),
         "hu_windows": hu_json,
         "use_coarse_prob": use_coarse_prob,
+        "roi_mode": args.roi_mode,
         "roi_aligned": roi_aligned,
         "roi_pad_xy": list(roi_pad_xy),
         "min_roi_xy": list(min_roi_xy),
@@ -233,6 +264,7 @@ def main() -> None:
         "crop_size": list(crop_size),
         "hu_windows": hu_json,
         "use_coarse_prob": use_coarse_prob,
+        "roi_mode": args.roi_mode,
         "roi_aligned": roi_aligned,
         "roi_pad_xy": list(roi_pad_xy),
         "min_roi_xy": list(min_roi_xy),
