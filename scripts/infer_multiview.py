@@ -10,6 +10,7 @@ produced by ``scripts/train_multiview.py`` (``multiview_results/.../multiview/ru
 Runs the same nnU-Net forward on preprocessed data as scripts/infer_coarse_to_fine.py (aligned shapes), then
 replaces only the tumor-class probability channel inside ROIs with the multiview network; outside
 ROIs the tumor channel stays the nnU-Net softmax. Writes only under ``-o``.
+Use ``--skip-heavy-val`` or ``--exclude-cases`` to omit large cases without a separate input folder.
 """
 
 from __future__ import annotations
@@ -143,6 +144,17 @@ def _parse_args() -> argparse.Namespace:
         help="Also write case_id.npz + case_id.pkl (softmax) like nnU-Net export.",
     )
     p.add_argument("--skip-existing", action="store_true")
+    p.add_argument(
+        "--skip-heavy-val",
+        action="store_true",
+        help="Skip case_0004 and case_0018 (very large volumes; typical nnU-Net tile count >3000 on fold 0 val).",
+    )
+    p.add_argument(
+        "--exclude-cases",
+        type=str,
+        default="",
+        help="Comma-separated case_ids to skip in addition to --skip-heavy-val (e.g. case_0004,case_0018).",
+    )
     # Multiview hyperparameters
     p.add_argument("--prob-lo", type=float, default=None)
     p.add_argument("--prob-hi", type=float, default=None)
@@ -258,6 +270,24 @@ def main() -> None:
         identifiers, list_of_lists = kept_id, kept_lol
         if not identifiers:
             raise SystemExit(f"No cases left after --split {args.split}.")
+
+    exclude: set[str] = set()
+    if args.skip_heavy_val:
+        exclude.update({"case_0004", "case_0018"})
+    if args.exclude_cases.strip():
+        exclude.update(x.strip() for x in args.exclude_cases.split(",") if x.strip())
+    if exclude:
+        kept_id: list = []
+        kept_lol: list = []
+        for cid, lol in zip(identifiers, list_of_lists):
+            if cid in exclude:
+                print(f"exclude {cid} (skipped by --skip-heavy-val / --exclude-cases)")
+                continue
+            kept_id.append(cid)
+            kept_lol.append(lol)
+        identifiers, list_of_lists = kept_id, kept_lol
+        if not identifiers:
+            raise SystemExit("No cases left after excluding case IDs.")
 
     for case_id, image_files in zip(identifiers, list_of_lists):
         out_seg = out_dir / f"{case_id}{file_ending}"
