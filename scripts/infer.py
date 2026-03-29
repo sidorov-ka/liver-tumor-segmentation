@@ -10,6 +10,8 @@ not a separate ``nnUNetv2_predict`` call — defaults (checkpoint, step size, TT
 - ``--split val`` (or ``train``): only cases listed in ``nnUNet_preprocessed/.../splits_final.json``
   for ``--fold`` (typical val metrics; input folder is still ``imagesTr`` or a staging dir).
 - ``--skip-existing``: skip cases whose output ``<case_id>.nii.gz`` already exists under ``-o``.
+- ``--save-probabilities``: save nnU-Net softmax (``<case_id>.npz`` + ``<case_id>.pkl`` + stage-1
+  ``<case_id>.nii.gz`` in nnU-Net layout). Use ``--prob-dir`` or defaults below.
 - Full two-stage: optional ``--export-stage1-to DIR`` writes stage-1 segmentations from the **same**
   forward pass used before refinement.
 
@@ -200,6 +202,19 @@ def _parse_args() -> argparse.Namespace:
         help="Two-stage only: also save nnU-Net stage-1 predictions here (same forward pass as refinement).",
     )
     p.add_argument(
+        "--save-probabilities",
+        action="store_true",
+        help="Save nnU-Net full softmax: <case_id>.npz (array 'probabilities'), <case_id>.pkl, and "
+        "stage-1 <case_id>.nii.gz. For --stage1-only defaults to -o; for two-stage defaults to "
+        "<out_dir>/nnunet_stage1_softmax (so final refined seg in -o is not overwritten).",
+    )
+    p.add_argument(
+        "--prob-dir",
+        type=str,
+        default=None,
+        help="Override directory for nnU-Net probability export (requires --save-probabilities).",
+    )
+    p.add_argument(
         "--device",
         type=str,
         default="cuda",
@@ -298,6 +313,9 @@ def _seg_to_fake_logits(final_seg: np.ndarray, num_classes: int) -> np.ndarray:
 def main() -> None:
     args = _parse_args()
 
+    if args.prob_dir and not args.save_probabilities:
+        raise SystemExit("--prob-dir requires --save-probabilities")
+
     if args.stage1_only:
         if args.refinement_dir:
             raise SystemExit("Do not pass --refinement-dir with --stage1-only")
@@ -365,9 +383,23 @@ def main() -> None:
     if stage1_export_dir is not None:
         stage1_export_dir.mkdir(parents=True, exist_ok=True)
 
+    prob_dir: Path | None
+    if args.save_probabilities:
+        if args.prob_dir:
+            prob_dir = _resolve_repo_path(repo, args.prob_dir)
+        elif args.stage1_only:
+            prob_dir = out_dir
+        else:
+            prob_dir = out_dir / "nnunet_stage1_softmax"
+        prob_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        prob_dir = None
+
     print(f"Writing predictions to {out_dir.resolve()}")
     if stage1_export_dir is not None:
         print(f"Also writing stage-1 (nnU-Net) predictions to {stage1_export_dir.resolve()}")
+    if args.save_probabilities and prob_dir is not None:
+        print(f"nnU-Net softmax (npz + pkl + stage-1 seg) -> {prob_dir.resolve()}")
 
     device = torch.device(args.device if args.device != "cuda" or torch.cuda.is_available() else "cpu")
 
@@ -425,7 +457,8 @@ def main() -> None:
     )
 
     for case_id, image_files in zip(identifiers, list_of_lists):
-        out_seg = _seg_nifti_path(out_dir, case_id, file_ending)
+        seg_dir_skip = (prob_dir if args.save_probabilities else out_dir) if args.stage1_only else out_dir
+        out_seg = _seg_nifti_path(seg_dir_skip, case_id, file_ending)
         if args.skip_existing and out_seg.is_file():
             print(f"skip {case_id} (exists: {out_seg.name})")
             continue
@@ -446,24 +479,39 @@ def main() -> None:
                 predictor.configuration_manager,
                 predictor.plans_manager,
                 predictor.dataset_json,
-                str(out_dir / case_id),
-                save_probabilities=False,
+                str((prob_dir if args.save_probabilities else out_dir) / case_id),
+                save_probabilities=bool(args.save_probabilities),
             )
             print(f"saved {case_id} (stage-1 only)")
             del data, props, logits
             gc.collect()
             continue
 
-        if stage1_export_dir is not None:
+        assert prob_dir is not None or not args.save_probabilities
+        if args.save_probabilities:
             export_prediction_from_logits(
-                logits,
+                logits.clone(),
                 props,
                 predictor.configuration_manager,
                 predictor.plans_manager,
                 predictor.dataset_json,
-                str(stage1_export_dir / case_id),
-                save_probabilities=False,
+                str(prob_dir / case_id),  # type: ignore[operator]
+                save_probabilities=True,
             )
+        if stage1_export_dir is not None:
+            need_stage1_dup = (not args.save_probabilities) or (
+                prob_dir is not None and stage1_export_dir.resolve() != prob_dir.resolve()
+            )
+            if need_stage1_dup:
+                export_prediction_from_logits(
+                    logits.clone() if args.save_probabilities else logits,
+                    props,
+                    predictor.configuration_manager,
+                    predictor.plans_manager,
+                    predictor.dataset_json,
+                    str(stage1_export_dir / case_id),
+                    save_probabilities=False,
+                )
 
         pred_seg = logits.argmax(dim=0).numpy().astype(np.int16)
         coarse_bin = threshold_coarse_tumor(pred_seg, tumor_label)
