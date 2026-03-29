@@ -13,10 +13,10 @@ not a separate ``nnUNetv2_predict`` call — defaults (checkpoint, step size, TT
 - ``--save-probabilities``: save nnU-Net softmax (``<case_id>.npz`` + ``<case_id>.pkl`` + stage-1
   ``<case_id>.nii.gz`` in nnU-Net layout). Use ``--prob-dir`` or defaults below.
 - Full two-stage: optional ``--export-stage1-to DIR`` writes stage-1 segmentations from the **same**
-  forward pass used before refinement.
+  forward pass used before coarse_to_fine refinement.
 
 Experiment roots under ``inference_comparison/``: ``baseline/`` (nnU-Net only),
-``coarse_to_fine/`` (two-stage coarse-to-fine refiner).
+``coarse_to_fine/`` (two-stage), ``multiview/`` (multi-window ROI script).
 Set nnUNet_raw, nnUNet_preprocessed, nnUNet_results before running.
 
 Stage-1 ``nnUNetPredictor`` matches ``scripts/export.py`` (tile step **0.75** by default, Gaussian,
@@ -43,11 +43,12 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from refinement.model import TinyUNet2d  # noqa: E402
-from refinement.roi import bbox3d_from_mask, threshold_coarse_tumor  # noqa: E402
-from refinement.utils import load_checkpoint  # noqa: E402
+from coarse_to_fine.model import TinyUNet2d  # noqa: E402
+from coarse_to_fine.roi import bbox3d_from_mask, threshold_coarse_tumor  # noqa: E402
+from coarse_to_fine.utils import load_checkpoint  # noqa: E402
 
 DEFAULT_INFERENCE_SUBDIR = "two_stage"
+# Experiment roots under inference_comparison/: baseline (nnU-Net only), coarse_to_fine (two-stage), multiview (scripts/infer_multiview.py).
 DEFAULT_OUTPUT_ROOT_BASELINE = "inference_comparison/baseline"
 DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE = "inference_comparison/coarse_to_fine"
 DEFAULT_DATASET_FOLDER = "Dataset001_LiverTumor"
@@ -115,7 +116,7 @@ def _resolve_repo_path(repo: Path, path_str: str) -> Path:
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="nnU-Net + optional refiner. For fair comparisons vs two-stage, use --stage1-only "
-        "or --export-stage1-to (same stage-1 stack as refinement; avoid mixing with nnUNetv2_predict defaults).",
+        "or --export-stage1-to (same stage-1 stack as coarse_to_fine; avoid mixing with nnUNetv2_predict defaults).",
     )
     p.add_argument(
         "-i",
@@ -139,8 +140,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Repo-relative or absolute root when -o is omitted. Default: "
         f"{DEFAULT_OUTPUT_ROOT_BASELINE} for --stage1-only, "
-        f"{DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE} for two-stage. "
-        "Use inference_comparison/multiview or inference_comparison/uncertainty for those experiments.",
+        f"{DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE} for two-stage.",
     )
     p.add_argument(
         "--dataset-folder",
@@ -184,22 +184,23 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
     p.add_argument(
-        "--refinement-dir",
+        "--coarse-to-fine-dir",
         type=str,
         default=None,
-        help="Refinement run dir with checkpoint_best.pth and meta.json. Not used with --stage1-only.",
+        dest="coarse_to_fine_dir",
+        help="coarse_to_fine run dir with checkpoint_best.pth and meta.json (stage coarse_to_fine). Not used with --stage1-only.",
     )
     p.add_argument(
         "--stage1-only",
         action="store_true",
         help="Only run nnU-Net (stage 1) and write to -o. Same predictor/preprocessing as two-stage; "
-        "use this for baseline masks comparable to refinement.",
+        "use this for nnU-Net-only masks comparable to the coarse_to_fine path.",
     )
     p.add_argument(
         "--export-stage1-to",
         type=str,
         default=None,
-        help="Two-stage only: also save nnU-Net stage-1 predictions here (same forward pass as refinement).",
+        help="Two-stage only: also save nnU-Net stage-1 predictions here (same forward pass as coarse_to_fine).",
     )
     p.add_argument(
         "--save-probabilities",
@@ -293,8 +294,13 @@ def _refine_roi_slices(
         nh, nw = img2d.shape
         ti = torch.from_numpy(_normalize_slice(img2d))[None, None].to(device)
         tc = torch.from_numpy(coarse2d)[None, None].to(device)
+        # Match train dataset: bilinear for CT and prob; nearest for binary coarse (coarse_to_fine.dataset._resize_pair).
+        ti = F.interpolate(ti, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+        if use_coarse_prob:
+            tc = F.interpolate(tc, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+        else:
+            tc = F.interpolate(tc, size=(h_crop, w_crop), mode="nearest")
         tin = torch.cat([ti, tc], dim=1)
-        tin = F.interpolate(tin, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
         logit = model(tin)
         pr = torch.sigmoid(logit)
         pr = F.interpolate(pr, size=(nh, nw), mode="bilinear", align_corners=False)
@@ -317,13 +323,13 @@ def main() -> None:
         raise SystemExit("--prob-dir requires --save-probabilities")
 
     if args.stage1_only:
-        if args.refinement_dir:
-            raise SystemExit("Do not pass --refinement-dir with --stage1-only")
+        if args.coarse_to_fine_dir:
+            raise SystemExit("Do not pass --coarse-to-fine-dir with --stage1-only")
         if args.export_stage1_to:
             raise SystemExit("--export-stage1-to is only for two-stage runs (omit --stage1-only)")
     else:
-        if not args.refinement_dir:
-            raise SystemExit("Two-stage inference requires --refinement-dir (or use --stage1-only)")
+        if not args.coarse_to_fine_dir:
+            raise SystemExit("Two-stage inference requires --coarse-to-fine-dir (or use --stage1-only)")
 
     repo = REPO_ROOT
     default_model = (
@@ -335,7 +341,7 @@ def main() -> None:
     model_dir = _resolve_repo_path(repo, args.model_dir) if args.model_dir else default_model
     in_dir = _resolve_repo_path(repo, args.input)
 
-    ref_dir = _resolve_repo_path(repo, args.refinement_dir) if args.refinement_dir else None
+    ref_dir = _resolve_repo_path(repo, args.coarse_to_fine_dir) if args.coarse_to_fine_dir else None
     ckpt_path = ref_dir / "checkpoint_best.pth" if ref_dir else None
     meta_path = ref_dir / "meta.json" if ref_dir else None
     if not args.stage1_only:
@@ -345,8 +351,14 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path and meta_path.is_file() else {}
     _cs = meta.get("crop_size", [256, 256])
     crop_size = (int(_cs[0]), int(_cs[1]))
-    use_coarse_prob = bool(meta.get("use_coarse_prob", False))
+    # Default True: matches train_coarse_to_fine (nnU-Net softmax prob channel). Old meta.json may set false.
+    use_coarse_prob = bool(meta.get("use_coarse_prob", True))
     in_channels = int(meta.get("in_channels", 2))
+    # 3D ROI padding (Z,Y,X): Y/X match train_coarse_to_fine roi_pad_xy; Z uses small default (per-slice training has no Z pad).
+    _rp = meta.get("roi_pad_xy", [16, 16])
+    _mr = meta.get("min_roi_xy", [32, 32])
+    bbox3d_pad = (2, int(_rp[0]), int(_rp[1]))
+    bbox3d_min_side = (1, int(_mr[0]), int(_mr[1]))
 
     if args.output_root is None:
         default_root = (
@@ -415,7 +427,7 @@ def main() -> None:
     tumor_label = _tumor_label(dataset_json)
     file_ending = dataset_json["file_ending"]
 
-    # Match scripts/export.py (same stage-1 stack as refinement export).
+    # Match scripts/export.py (same stage-1 stack as coarse_to_fine export).
     predictor = nnUNetPredictor(
         tile_step_size=float(args.tile_step_size),
         use_gaussian=True,
@@ -515,7 +527,11 @@ def main() -> None:
 
         pred_seg = logits.argmax(dim=0).numpy().astype(np.int16)
         coarse_bin = threshold_coarse_tumor(pred_seg, tumor_label)
-        bbox = bbox3d_from_mask(coarse_bin)
+        bbox = bbox3d_from_mask(
+            coarse_bin,
+            pad=bbox3d_pad,
+            min_side=bbox3d_min_side,
+        )
 
         logits_for_refine: torch.Tensor | None = None
         if use_coarse_prob:

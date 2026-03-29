@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Export nnU-Net stage-1 predictions + paired preprocessed slices for refinement training.
+Export **only from the base nnU-Net model** (stage 1): predictions + paired preprocessed slices
+for later ``train_coarse_to_fine`` / ``train_multiview``. Later stages do not change this script or the base checkpoint.
 
-Uses the same preprocessing as training so tensors align with nnU-Net logits.
-Default sliding-window step matches ``scripts/infer.py`` (0.75) for a consistent baseline.
+Uses the same preprocessing as nnU-Net training so tensors align with logits. Default tile step
+matches ``scripts/infer_coarse_to_fine.py`` (0.75). If you already exported for a given nnU-Net run, keep using
+that tree; re-run export only when the base model, data, or export settings change.
 """
 
 from __future__ import annotations
@@ -19,14 +21,16 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from refinement.dataset import save_manifest_json  # noqa: E402
+from coarse_to_fine.dataset import save_manifest_json  # noqa: E402
 
-# Same default as scripts/infer.py (nnUNetPredictor tile_step_size)
+# Same default as scripts/infer_coarse_to_fine.py (nnUNetPredictor tile_step_size)
 DEFAULT_TILE_STEP_SIZE = 0.75
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Export stage-1 nnU-Net preds for refinement (train/val slices).")
+    p = argparse.ArgumentParser(
+        description="Export stage-1 nnU-Net preds for train_coarse_to_fine / train_multiview (train/val slices)."
+    )
     p.add_argument(
         "--nnunet-raw",
         type=str,
@@ -79,7 +83,7 @@ def _parse_args() -> argparse.Namespace:
         "--tile-step-size",
         type=float,
         default=DEFAULT_TILE_STEP_SIZE,
-        help="nnU-Net sliding-window step (default 0.75; same as infer.py).",
+        help="nnU-Net sliding-window step (default 0.75; same as infer_coarse_to_fine.py).",
     )
     return p.parse_args()
 

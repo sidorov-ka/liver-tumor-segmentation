@@ -1,4 +1,4 @@
-"""Train / validate refinement model; logs mirror nnU-Net style under refinement_results/."""
+"""Train / validate coarse-to-fine model; logs under coarse_to_fine_results/.../coarse_to_fine/run_*/."""
 
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from refinement.metrics import BinaryConfusion, merge_per_case_metrics
-from refinement.model import TinyUNet2d
-from refinement.utils import bce_dice_loss, dice_coefficient, save_checkpoint
+from coarse_to_fine.metrics import BinaryConfusion, merge_per_case_metrics
+from coarse_to_fine.model import TinyUNet2d
+from coarse_to_fine.utils import bce_dice_loss, dice_coefficient, save_checkpoint
 
 LABEL_TUMOR = "2"  # LiTS tumor label id (matches nnU-Net summary.json)
 
 
-def refinement_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+def coarse_to_fine_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "x": torch.stack([b["x"] for b in batch]),
         "y": torch.stack([b["y"] for b in batch]),
@@ -140,7 +140,8 @@ def run_training(
 
     log(
         "#######################################################################\n"
-        "Refinement stage 2 — binary tumor (coarse-to-fine). Not nnU-Net; "
+        "Coarse-to-fine stage 2 — binary tumor refinement (prob map + ROI-aligned crops by default; "
+        "see Li et al. UTR arXiv:2409.09796 for probability refinement idea). Not nnU-Net; "
         "metrics layout is compatible with nnU-Net validation summary.\n"
         "#######################################################################",
         also_print=True,
@@ -197,14 +198,14 @@ def run_training(
             )
             per_case_list = merge_per_case_metrics(va["per_case_confusion"], LABEL_TUMOR)
             best_summary = {
-                "task": "refinement_stage2_binary_tumor",
+                "task": "coarse_to_fine_stage2_binary_tumor",
                 "label": "tumor maps to nnU-Net label key",
                 "label_key": LABEL_TUMOR,
                 "foreground_mean": {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()},
                 "mean": {LABEL_TUMOR: {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}},
                 "metric_per_case": per_case_list,
                 "best_epoch": epoch,
-                "note": "Refinement trains on 2D crops; metrics are on resized crop tensors (see meta.json crop_size).",
+                "note": "Metrics on resized ROI tensors (crop_size, ROI-aligned with infer by default). See meta.json use_coarse_prob, roi_aligned.",
             }
             (val_dir / "summary.json").write_text(
                 json.dumps(best_summary, indent=2),

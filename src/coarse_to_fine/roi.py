@@ -34,6 +34,51 @@ def threshold_coarse_tumor(
     return (coarse_seg == tumor_label).astype(np.float32)
 
 
+def bbox2d_from_mask(
+    mask: np.ndarray,
+    pad: Tuple[int, int] = (16, 16),
+    min_side: Tuple[int, int] = (32, 32),
+) -> Optional[Tuple[int, int, int, int]]:
+    """
+    2D bbox for a single axial slice. mask: (Y, X) binary.
+    Returns (y0, y1, x0, x1) inclusive-exclusive, or None if empty.
+    Padding and minimum side — same spirit as bbox3d_from_mask (Y/X only).
+    """
+    if mask.ndim != 2:
+        raise ValueError(f"mask must be (Y,X), got {mask.shape}")
+    if not np.any(mask > 0.5):
+        return None
+    yy, xx = np.where(mask > 0.5)
+    y0, y1 = int(yy.min()), int(yy.max()) + 1
+    x0, x1 = int(xx.min()), int(xx.max()) + 1
+    py, px = pad
+    Y, X = mask.shape
+    y0 = max(0, y0 - py)
+    y1 = min(Y, y1 + py)
+    x0 = max(0, x0 - px)
+    x1 = min(X, x1 + px)
+
+    def expand_axis(a0: int, a1: int, amin: int, amax: int) -> Tuple[int, int]:
+        cur = a1 - a0
+        if cur >= amin:
+            return a0, a1
+        need = amin - cur
+        left = need // 2
+        right = need - left
+        a0n = max(0, a0 - left)
+        a1n = min(amax, a1 + right)
+        if a1n - a0n < amin:
+            if a0n == 0:
+                a1n = min(amax, amin)
+            else:
+                a0n = max(0, amax - amin)
+        return a0n, a1n
+
+    y0, y1 = expand_axis(y0, y1, min_side[0], Y)
+    x0, x1 = expand_axis(x0, x1, min_side[1], X)
+    return y0, y1, x0, x1
+
+
 def bbox3d_from_mask(
     mask: np.ndarray,
     pad: Tuple[int, int, int] = (2, 16, 16),

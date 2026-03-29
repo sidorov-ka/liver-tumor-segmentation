@@ -2,7 +2,7 @@
 """
 Volumetric Dice / IoU for tumor vs nnU-Net-style reference labels.
 
-Expects predictions from ``infer.py`` (flat ``<pred_dir>/<case_id>.nii.gz``) and GT in
+Expects predictions from ``infer_coarse_to_fine.py`` or ``infer_multiview.py`` (flat ``<pred_dir>/<case_id>.nii.gz``) and GT in
 ``<gt_dir>/<case_id>.nii.gz`` (e.g. ``labelsTr``). Same spacing/shape as usual after nnU-Net export.
 """
 
@@ -91,7 +91,7 @@ def _parse_args() -> argparse.Namespace:
         "--pred-dir",
         type=str,
         required=True,
-        help="Folder with predictions (*.nii.gz), same layout as infer.py output.",
+        help="Folder with predictions (*.nii.gz), same layout as infer_coarse_to_fine / infer_multiview output.",
     )
     p.add_argument(
         "--gt-dir",

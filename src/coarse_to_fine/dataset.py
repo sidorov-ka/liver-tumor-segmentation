@@ -1,4 +1,12 @@
-"""NPZ dataset for stage-2 refinement (exported slices)."""
+"""NPZ dataset for coarse_to_fine (exported slices).
+
+Training aligned with inference (scripts/infer_coarse_to_fine.py _refine_roi_slices):
+  - Second channel: nnU-Net tumor **probability** (softmax), matching Universal Topology
+    Refinement-style refinement of probability maps (Li et al., arXiv:2409.09796). We use real
+    nnU-Net probs + 2D ROI crops; full polynomial synthesis from the paper is not implemented.
+  - Optional ROI: crop around (GT ∪ coarse) with pad / min side, then **per-patch** ``_normalize_slice``
+    on the CT channel (matches ``infer_coarse_to_fine._refine_roi_slices``: normalize ROI only, then resize).
+"""
 
 from __future__ import annotations
 
@@ -11,7 +19,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from refinement.metrics import parse_case_id_from_npz
+from coarse_to_fine.metrics import parse_case_id_from_npz
+from coarse_to_fine.roi import bbox2d_from_mask
 
 
 def _normalize_slice(x: np.ndarray) -> np.ndarray:
@@ -40,12 +49,31 @@ def _resize_pair(
     return img_r, m1_r, m2_r
 
 
+def _resize_pair_prob(
+    img: np.ndarray,
+    coarse_prob: np.ndarray,
+    gt: np.ndarray,
+    size: Tuple[int, int],
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Bilinear for image and coarse probability; nearest for GT."""
+    h, w = size
+    ti = torch.from_numpy(img)[None, None].float()
+    ti = F.interpolate(ti, size=(h, w), mode="bilinear", align_corners=False)
+    img_r = ti[0, 0].numpy()
+    tc = torch.from_numpy(coarse_prob)[None, None].float()
+    tc = F.interpolate(tc, size=(h, w), mode="bilinear", align_corners=False)
+    coarse_r = tc[0, 0].numpy()
+    m2_t = torch.from_numpy(gt)[None, None].float()
+    gt_r = F.interpolate(m2_t, size=(h, w), mode="nearest")[0, 0].numpy()
+    return img_r, coarse_r, gt_r
+
+
 class RefinementSliceDataset(Dataset):
     """
     Reads .npz files produced by scripts/export.py.
 
     Each sample:
-      input: (C, H, W) — image + coarse (+ optional prob)
+      input: (C, H, W) — image + coarse (prob or binary)
       target: (1, H, W) — GT tumor binary
     """
 
@@ -53,11 +81,17 @@ class RefinementSliceDataset(Dataset):
         self,
         manifest: List[Path],
         crop_size: Tuple[int, int] = (256, 256),
-        use_coarse_prob: bool = False,
+        use_coarse_prob: bool = True,
+        roi_aligned: bool = True,
+        roi_pad_xy: Tuple[int, int] = (16, 16),
+        min_roi_xy: Tuple[int, int] = (32, 32),
     ):
         self.manifest = manifest
         self.crop_size = crop_size
         self.use_coarse_prob = use_coarse_prob
+        self.roi_aligned = roi_aligned
+        self.roi_pad_xy = roi_pad_xy
+        self.min_roi_xy = min_roi_xy
 
     def __len__(self) -> int:
         return len(self.manifest)
@@ -74,11 +108,27 @@ class RefinementSliceDataset(Dataset):
         gt = z["gt_tumor"].astype(np.float32)
         if img.ndim == 3:
             img = img[0]
-        img = _normalize_slice(img)
         coarse = np.clip(coarse, 0.0, 1.0)
         gt = (gt > 0.5).astype(np.float32)
 
-        img, coarse, gt = _resize_pair(img, coarse, gt, self.crop_size)
+        if self.roi_aligned:
+            gt_bin = gt > 0.5
+            coarse_bin = coarse > 0.5
+            union = np.logical_or(gt_bin, coarse_bin).astype(np.float32)
+            box = bbox2d_from_mask(union, pad=self.roi_pad_xy, min_side=self.min_roi_xy)
+            if box is not None:
+                y0, y1, x0, x1 = box
+                img = img[y0:y1, x0:x1]
+                coarse = coarse[y0:y1, x0:x1]
+                gt = gt[y0:y1, x0:x1]
+
+        # Match infer_coarse_to_fine._refine_roi_slices: normalize CT on the ROI patch only (not full slice).
+        img = _normalize_slice(img)
+
+        if self.use_coarse_prob:
+            img, coarse, gt = _resize_pair_prob(img, coarse, gt, self.crop_size)
+        else:
+            img, coarse, gt = _resize_pair(img, coarse, gt, self.crop_size)
 
         x = np.stack([img, coarse], axis=0).astype(np.float32)
         y = gt[None, ...].astype(np.float32)
@@ -103,14 +153,24 @@ def load_manifest(export_root: Path) -> Tuple[List[Path], List[Path]]:
 def build_datasets(
     export_root: Path,
     crop_size: Tuple[int, int] = (256, 256),
-    use_coarse_prob: bool = False,
+    use_coarse_prob: bool = True,
+    roi_aligned: bool = True,
+    roi_pad_xy: Tuple[int, int] = (16, 16),
+    min_roi_xy: Tuple[int, int] = (32, 32),
     max_train: Optional[int] = None,
 ) -> Tuple[RefinementSliceDataset, RefinementSliceDataset]:
     train_paths, val_paths = load_manifest(export_root)
     if max_train is not None:
         train_paths = train_paths[:max_train]
-    train_ds = RefinementSliceDataset(train_paths, crop_size, use_coarse_prob)
-    val_ds = RefinementSliceDataset(val_paths, crop_size, use_coarse_prob)
+    common = dict(
+        crop_size=crop_size,
+        use_coarse_prob=use_coarse_prob,
+        roi_aligned=roi_aligned,
+        roi_pad_xy=roi_pad_xy,
+        min_roi_xy=min_roi_xy,
+    )
+    train_ds = RefinementSliceDataset(train_paths, **common)
+    val_ds = RefinementSliceDataset(val_paths, **common)
     return train_ds, val_ds
 
 

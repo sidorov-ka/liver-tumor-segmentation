@@ -31,12 +31,20 @@ nnUNet_preprocessed/*
 nnUNet_results/*
 !nnUNet_results/.gitkeep
 
-# Refinement stage 2 (metrics/checkpoints; same idea as nnUNet_results but separate tree)
-refinement_results/*
-!refinement_results/.gitkeep
+# coarse_to_fine only (was historically refinement_results; do not mix with multiview)
+coarse_to_fine_results/*
+!coarse_to_fine_results/.gitkeep
+coarse_to_fine_export/
 
-# Stage-2 export cache + full inference comparison trees (large; regenerate from scripts)
+# multiview only (MultiviewUNet2d checkpoints / logs — separate from coarse_to_fine_results)
+multiview_results/*
+!multiview_results/.gitkeep
+
+# legacy names (optional local dirs)
+refinement_results/*
 refinement_export/
+
+# full inference comparison trees (large; regenerate from scripts)
 inference_comparison/
 
 # Medical imaging
