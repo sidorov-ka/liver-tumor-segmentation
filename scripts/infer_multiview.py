@@ -8,8 +8,8 @@ Nodule Segmentation*). Do not point ``--multiview-dir`` at a coarse_to_fine run;
 produced by ``scripts/train_multiview.py`` (``multiview_results/.../multiview/run_*``).
 
 Runs the same nnU-Net forward on preprocessed data as scripts/infer_coarse_to_fine.py (aligned shapes), then
-replaces only the tumor-class probability channel inside ROIs with the multiview network; outside
-ROIs the tumor channel stays the nnU-Net softmax. Writes only under ``-o``.
+updates the tumor-class probability channel inside suspicious ROIs (replace or blend with nnU-Net prob;
+see ``MultiviewConfig``); outside ROIs the tumor channel stays the nnU-Net softmax. Writes only under ``-o``.
 Use ``--skip-heavy-val`` or ``--exclude-cases`` to omit large cases without a separate input folder.
 """
 
@@ -29,7 +29,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from coarse_to_fine.utils import load_checkpoint  # noqa: E402
-from multiview.config import MultiviewConfig  # noqa: E402
+from multiview.config import (  # noqa: E402
+    MultiviewConfig,
+    merge_multiview_config_from_meta_dict,
+)
 from multiview.model import MultiviewUNet2d  # noqa: E402
 from multiview.pipeline import refine_tumor_probability_volume  # noqa: E402
 
@@ -61,20 +64,7 @@ def _cfg_from_meta(cfg: MultiviewConfig, meta: dict) -> None:
     if cs and len(cs) == 2:
         cfg.crop_size = (int(cs[0]), int(cs[1]))
     mc = meta.get("multiview_config") or {}
-    if "prob_lo" in mc:
-        cfg.prob_lo = float(mc["prob_lo"])
-    if "prob_hi" in mc:
-        cfg.prob_hi = float(mc["prob_hi"])
-    if "min_component_voxels" in mc:
-        cfg.min_component_voxels = int(mc["min_component_voxels"])
-    if "roi_pad" in mc and len(mc["roi_pad"]) == 3:
-        cfg.roi_pad = (int(mc["roi_pad"][0]), int(mc["roi_pad"][1]), int(mc["roi_pad"][2]))
-    if "min_roi_side" in mc and len(mc["min_roi_side"]) == 3:
-        cfg.min_roi_side = (
-            int(mc["min_roi_side"][0]),
-            int(mc["min_roi_side"][1]),
-            int(mc["min_roi_side"][2]),
-        )
+    merge_multiview_config_from_meta_dict(cfg, mc)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -162,6 +152,45 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--roi-pad", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--min-roi-side", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--crop-size", type=int, nargs=2, default=None, metavar=("H", "W"))
+    p.add_argument(
+        "--prob-high-band-lo",
+        type=float,
+        default=None,
+        help="Optional second suspicious band lower bound (set with --prob-high-band-hi).",
+    )
+    p.add_argument(
+        "--prob-high-band-hi",
+        type=float,
+        default=None,
+        help="Optional second suspicious band upper bound.",
+    )
+    p.add_argument(
+        "--refine-blend-mode",
+        type=str,
+        choices=("replace", "blend"),
+        default=None,
+        help="replace = full overwrite in ROI (default); blend = mix with nnU-Net prob.",
+    )
+    p.add_argument(
+        "--refine-alpha",
+        type=float,
+        default=None,
+        help="Blend weight for refined prob when --refine-blend-mode blend and no size split.",
+    )
+    p.add_argument(
+        "--component-size-alpha-threshold-voxels",
+        type=int,
+        default=None,
+        help="If >0 with blend: small components use --alpha-blend-small, else --alpha-blend-large.",
+    )
+    p.add_argument("--alpha-blend-small", type=float, default=None)
+    p.add_argument("--alpha-blend-large", type=float, default=None)
+    p.add_argument(
+        "--post-remove-tumor-components-below-voxels",
+        type=int,
+        default=None,
+        help="Remove 3D tumor CCs (p>0.5) smaller than this (0 = off).",
+    )
     return p.parse_args()
 
 
@@ -225,6 +254,22 @@ def main() -> None:
         cfg.min_roi_side = (int(args.min_roi_side[0]), int(args.min_roi_side[1]), int(args.min_roi_side[2]))
     if args.crop_size is not None:
         cfg.crop_size = (int(args.crop_size[0]), int(args.crop_size[1]))
+    if args.prob_high_band_lo is not None:
+        cfg.prob_high_band_lo = float(args.prob_high_band_lo)
+    if args.prob_high_band_hi is not None:
+        cfg.prob_high_band_hi = float(args.prob_high_band_hi)
+    if args.refine_blend_mode is not None:
+        cfg.refine_blend_mode = str(args.refine_blend_mode)
+    if args.refine_alpha is not None:
+        cfg.refine_alpha = float(args.refine_alpha)
+    if args.component_size_alpha_threshold_voxels is not None:
+        cfg.component_size_alpha_threshold_voxels = int(args.component_size_alpha_threshold_voxels)
+    if args.alpha_blend_small is not None:
+        cfg.alpha_blend_small = float(args.alpha_blend_small)
+    if args.alpha_blend_large is not None:
+        cfg.alpha_blend_large = float(args.alpha_blend_large)
+    if args.post_remove_tumor_components_below_voxels is not None:
+        cfg.post_remove_tumor_components_below_voxels = int(args.post_remove_tumor_components_below_voxels)
 
     predictor = nnUNetPredictor(
         tile_step_size=float(args.tile_step_size),

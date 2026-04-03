@@ -10,8 +10,18 @@ from multiview.config import MultiviewConfig
 
 
 def suspicious_mask(prob_tumor: np.ndarray, cfg: MultiviewConfig) -> np.ndarray:
-    """Binary mask: ambiguous tumor probability band."""
-    return ((prob_tumor >= cfg.prob_lo) & (prob_tumor <= cfg.prob_hi)).astype(np.uint8)
+    """Binary mask: union of primary [prob_lo, prob_hi] and optional high band."""
+    p = prob_tumor.astype(np.float32)
+    primary = (p >= cfg.prob_lo) & (p <= cfg.prob_hi)
+    hlo, hhi = cfg.prob_high_band_lo, cfg.prob_high_band_hi
+    if hlo is None and hhi is None:
+        return primary.astype(np.uint8)
+    if (hlo is None) ^ (hhi is None):
+        raise ValueError("Set both prob_high_band_lo and prob_high_band_hi, or neither.")
+    if not (float(hlo) < float(hhi)):
+        raise ValueError("prob_high_band_lo must be < prob_high_band_hi.")
+    high = (p >= float(hlo)) & (p <= float(hhi))
+    return (primary | high).astype(np.uint8)
 
 
 def connected_components_3d(mask: np.ndarray) -> Tuple[np.ndarray, int]:

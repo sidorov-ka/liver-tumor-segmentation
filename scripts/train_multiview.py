@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from multiview.config import MultiviewConfig  # noqa: E402
+from multiview.config import MultiviewConfig, multiview_config_to_json_dict  # noqa: E402
 from multiview.dataset import build_multiview_datasets  # noqa: E402
 from multiview.paths import DEFAULT_MULTIVIEW_RESULTS_ROOT, MULTIVIEW_TASK_DIR  # noqa: E402
 from multiview.trainer import multiview_collate_fn, run_training  # noqa: E402
@@ -104,6 +104,14 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--min-component-voxels", type=int, default=None)
     p.add_argument("--roi-pad-3d", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--min-roi-side-3d", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
+    p.add_argument("--prob-high-band-lo", type=float, default=None)
+    p.add_argument("--prob-high-band-hi", type=float, default=None)
+    p.add_argument("--refine-blend-mode", type=str, choices=("replace", "blend"), default=None)
+    p.add_argument("--refine-alpha", type=float, default=None)
+    p.add_argument("--component-size-alpha-threshold-voxels", type=int, default=None)
+    p.add_argument("--alpha-blend-small", type=float, default=None)
+    p.add_argument("--alpha-blend-large", type=float, default=None)
+    p.add_argument("--post-remove-tumor-components-below-voxels", type=int, default=None)
     return p.parse_args()
 
 
@@ -125,6 +133,22 @@ def _apply_mv_cfg_args(cfg: MultiviewConfig, args: argparse.Namespace) -> None:
     cs = getattr(args, "_crop_size_tuple", None)
     if cs is not None:
         cfg.crop_size = (int(cs[0]), int(cs[1]))
+    if args.prob_high_band_lo is not None:
+        cfg.prob_high_band_lo = float(args.prob_high_band_lo)
+    if args.prob_high_band_hi is not None:
+        cfg.prob_high_band_hi = float(args.prob_high_band_hi)
+    if args.refine_blend_mode is not None:
+        cfg.refine_blend_mode = str(args.refine_blend_mode)
+    if args.refine_alpha is not None:
+        cfg.refine_alpha = float(args.refine_alpha)
+    if args.component_size_alpha_threshold_voxels is not None:
+        cfg.component_size_alpha_threshold_voxels = int(args.component_size_alpha_threshold_voxels)
+    if args.alpha_blend_small is not None:
+        cfg.alpha_blend_small = float(args.alpha_blend_small)
+    if args.alpha_blend_large is not None:
+        cfg.alpha_blend_large = float(args.alpha_blend_large)
+    if args.post_remove_tumor_components_below_voxels is not None:
+        cfg.post_remove_tumor_components_below_voxels = int(args.post_remove_tumor_components_below_voxels)
 
 
 def main() -> None:
@@ -230,14 +254,7 @@ def main() -> None:
         "roi_aligned": roi_aligned,
         "roi_pad_xy": list(roi_pad_xy),
         "min_roi_xy": list(min_roi_xy),
-        "multiview_config": {
-            "prob_lo": mv_cfg.prob_lo,
-            "prob_hi": mv_cfg.prob_hi,
-            "min_component_voxels": mv_cfg.min_component_voxels,
-            "roi_pad": list(mv_cfg.roi_pad),
-            "min_roi_side": list(mv_cfg.min_roi_side),
-            "crop_size": list(mv_cfg.crop_size),
-        },
+        "multiview_config": multiview_config_to_json_dict(mv_cfg),
         "bce_weight": args.bce_weight,
         "max_train": args.max_train,
     }

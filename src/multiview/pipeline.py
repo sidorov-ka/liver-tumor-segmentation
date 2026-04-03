@@ -25,6 +25,22 @@ def _normalize_slice(x: np.ndarray) -> np.ndarray:
     return (x - m) / s
 
 
+def _blend_alpha(cfg: MultiviewConfig, component_nv: int) -> float:
+    """Alpha for blend mode: 1.0 means full replacement (same as replace mode)."""
+    mode = (cfg.refine_blend_mode or "replace").strip().lower()
+    if mode == "replace":
+        return 1.0
+    if mode != "blend":
+        raise ValueError(f"refine_blend_mode must be 'replace' or 'blend', got {cfg.refine_blend_mode!r}")
+    if cfg.component_size_alpha_threshold_voxels > 0:
+        return float(
+            cfg.alpha_blend_small
+            if component_nv < cfg.component_size_alpha_threshold_voxels
+            else cfg.alpha_blend_large
+        )
+    return float(cfg.refine_alpha)
+
+
 def _forward_patch(
     model: "nn.Module",
     ct_patch_hw: np.ndarray,
@@ -53,6 +69,20 @@ def _forward_patch(
     return pr[0, 0].cpu().numpy().astype(np.float32)
 
 
+def _post_remove_small_tumor_prob(prob: np.ndarray, min_voxels: int) -> np.ndarray:
+    """Zero tumor prob on small 3D CCs of (prob > 0.5)."""
+    if min_voxels <= 0:
+        return prob
+    out = prob.copy()
+    mask = (out > 0.5).astype(np.uint8)
+    labeled, n = connected_components_3d(mask)
+    for label_id in range(1, n + 1):
+        comp = labeled == label_id
+        if int(comp.sum()) < min_voxels:
+            out[comp] = 0.0
+    return out
+
+
 @torch.no_grad()
 def refine_tumor_probability_volume(
     ct_hu: np.ndarray,
@@ -72,7 +102,7 @@ def refine_tumor_probability_volume(
     susp = suspicious_mask(prob_tumor, cfg)
     labeled, n = connected_components_3d(susp)
     if n == 0:
-        return out
+        return _post_remove_small_tumor_prob(out, cfg.post_remove_tumor_components_below_voxels)
 
     h_crop, w_crop = cfg.crop_size
     model.eval()
@@ -89,6 +119,7 @@ def refine_tumor_probability_volume(
         )
         if bbox is None:
             continue
+        alpha = _blend_alpha(cfg, nv)
         _refine_one_bbox(
             out,
             ct_hu,
@@ -98,7 +129,9 @@ def refine_tumor_probability_volume(
             cfg,
             h_crop,
             w_crop,
+            alpha,
         )
+    out = _post_remove_small_tumor_prob(out, cfg.post_remove_tumor_components_below_voxels)
     return out
 
 
@@ -111,6 +144,7 @@ def _refine_one_bbox(
     cfg: MultiviewConfig,
     h_crop: int,
     w_crop: int,
+    alpha: float,
 ) -> None:
     z0, z1, y0, y1, x0, x1 = bbox.z0, bbox.z1, bbox.y0, bbox.y1, bbox.x0, bbox.x1
     for z in range(z0, z1):
@@ -127,4 +161,8 @@ def _refine_one_bbox(
             (h_crop, w_crop),
             device,
         )
-        out[z, y0:y1, x0:x1] = pr_new
+        if alpha >= 1.0 - 1e-7:
+            out[z, y0:y1, x0:x1] = pr_new
+        else:
+            coarse2d = pr2d.astype(np.float32)
+            out[z, y0:y1, x0:x1] = alpha * pr_new + (1.0 - alpha) * coarse2d
