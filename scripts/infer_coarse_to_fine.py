@@ -10,6 +10,8 @@ not a separate ``nnUNetv2_predict`` call — defaults (checkpoint, step size, TT
 - ``--split val`` (or ``train``): only cases listed in ``nnUNet_preprocessed/.../splits_final.json``
   for ``--fold`` (typical val metrics; input folder is still ``imagesTr`` or a staging dir).
 - ``--skip-existing``: skip cases whose output ``<case_id>.nii.gz`` already exists under ``-o``.
+- By default ``case_0004`` and ``case_0018`` are skipped (very large volumes); use ``--no-skip-heavy-val`` to include them.
+  ``--exclude-cases`` adds more IDs to skip (same as ``infer_multiview`` / ``infer_uncertainty``).
 - ``--save-probabilities``: save nnU-Net softmax (``<case_id>.npz`` + ``<case_id>.pkl`` + stage-1
   ``<case_id>.nii.gz`` in nnU-Net layout). Use ``--prob-dir`` or defaults below.
 - Full two-stage: optional ``--export-stage1-to DIR`` writes stage-1 segmentations from the **same**
@@ -181,6 +183,25 @@ def _parse_args() -> argparse.Namespace:
         "--skip-existing",
         action="store_true",
         help="Skip a case if its output segmentation (<case_id>+file_ending) already exists under -o.",
+    )
+    p.add_argument(
+        "--skip-heavy-val",
+        dest="skip_heavy_val",
+        action="store_true",
+        help="Skip case_0004 and case_0018 (very large volumes). Default: on; use --no-skip-heavy-val to run them.",
+    )
+    p.add_argument(
+        "--no-skip-heavy-val",
+        dest="skip_heavy_val",
+        action="store_false",
+        help="Run case_0004 and case_0018 (high RAM).",
+    )
+    p.set_defaults(skip_heavy_val=True)
+    p.add_argument(
+        "--exclude-cases",
+        type=str,
+        default="",
+        help="Comma-separated case_ids to skip in addition to heavy cases (when skip-heavy-val is on).",
     )
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
     p.add_argument(
@@ -467,6 +488,24 @@ def main() -> None:
         splits_path,
         load_json,
     )
+
+    exclude: set[str] = set()
+    if args.skip_heavy_val:
+        exclude.update({"case_0004", "case_0018"})
+    if args.exclude_cases.strip():
+        exclude.update(x.strip() for x in args.exclude_cases.split(",") if x.strip())
+    if exclude:
+        kept_id: list = []
+        kept_lol: list = []
+        for cid, lol in zip(identifiers, list_of_lists):
+            if cid in exclude:
+                print(f"exclude {cid} (skipped by --skip-heavy-val / --exclude-cases)")
+                continue
+            kept_id.append(cid)
+            kept_lol.append(lol)
+        identifiers, list_of_lists = kept_id, kept_lol
+        if not identifiers:
+            raise SystemExit("No cases left after excluding case IDs.")
 
     for case_id, image_files in zip(identifiers, list_of_lists):
         seg_dir_skip = (prob_dir if args.save_probabilities else out_dir) if args.stage1_only else out_dir

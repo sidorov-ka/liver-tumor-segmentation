@@ -2,11 +2,21 @@
 """
 Uncertainty-guided inference: coarse-tumor (± optional high-entropy) ROIs + 5-channel 2D refinement.
 
-Uses **UncertaintyUNet2d** (5 ch: three HU windows + tumor prob + normalized entropy). Train with
-``scripts/train_uncertainty.py``; point ``--uncertainty-dir`` at ``results_uncertainty/.../uncertainty/run_*``.
+Uses **UncertaintyUNet2d** / **UncertaintyDualHeadUNet2d** (5 ch: three HU windows + tumor prob + entropy).
+Dual-head runs apply an error gate on inference. Train with ``scripts/train_uncertainty.py``; point
+``--uncertainty-dir`` at ``results_uncertainty/.../uncertainty/run_*``.
 
 Pipeline: nnU-Net logits → softmax → tumor prob → entropy U(p) → ROI from coarse mask (not uncertainty-only) →
-refinement inside ROI → blend/replace → renormalize softmax → export under ``-o`` (e.g. inference_comparison/uncertainty).
+refinement inside ROI → renormalize softmax → export under ``-o`` (e.g. inference_comparison/uncertainty).
+
+If ``--update-mode`` is omitted, the refiner output **replaces** nnU-Net prob inside the ROI (matches the training
+objective; use ``--update-mode blend`` to mix with baseline like old defaults in ``meta.json``).
+
+**Host RAM:** default ``--logits-float16`` keeps stage-1 logits in half precision before softmax (same idea as
+``infer_coarse_to_fine``). Renormalization updates ``probs`` in place (no duplicate full softmax tensor). Use
+``--full-precision-logits`` only if you need float32 logits. Larger ``--tile-step-size`` (e.g. 0.85–1.0) reduces
+sliding-window overlap and peak RAM. ``--no-mirroring`` also helps. ``--nnunet-low-vram`` sets
+``perform_everything_on_device=False`` (saves GPU VRAM; may use more CPU RAM).
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ from uncertainty.config import (  # noqa: E402
     UncertaintyConfig,
     merge_uncertainty_config_from_meta_dict,
 )
-from uncertainty.model import UncertaintyUNet2d  # noqa: E402
+from uncertainty.model import build_uncertainty_model  # noqa: E402
 from uncertainty.pipeline import refine_tumor_probability_volume  # noqa: E402
 
 
@@ -98,17 +108,52 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--nnunet-preprocessed", type=str, default=None)
     p.add_argument("--split", type=str, choices=["all", "val", "train"], default="all")
     p.add_argument("--device", type=str, default="cuda")
-    p.add_argument("--tile-step-size", type=float, default=0.75)
+    p.add_argument(
+        "--tile-step-size",
+        type=float,
+        default=0.75,
+        help="nnU-Net sliding-window step (default 0.75; larger values reduce overlap and peak host RAM).",
+    )
     p.add_argument("--no-mirroring", action="store_true")
+    p.add_argument(
+        "--logits-float16",
+        dest="logits_float16",
+        action="store_true",
+        default=True,
+        help="Half-precision stage-1 logits on CPU before softmax (default: on; saves host RAM).",
+    )
+    p.add_argument(
+        "--full-precision-logits",
+        dest="logits_float16",
+        action="store_false",
+        help="Float32 stage-1 logits on CPU (more host RAM).",
+    )
+    p.add_argument(
+        "--nnunet-low-vram",
+        action="store_true",
+        help="Run nnU-Net with perform_everything_on_device=False (saves GPU VRAM; may use more CPU RAM).",
+    )
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
     p.add_argument("--save-probabilities", action="store_true")
     p.add_argument("--skip-existing", action="store_true")
-    p.add_argument("--skip-heavy-val", action="store_true")
+    p.add_argument(
+        "--skip-heavy-val",
+        dest="skip_heavy_val",
+        action="store_true",
+        help="Skip case_0004 and case_0018 (very large volumes). Default: on; use --no-skip-heavy-val to run them.",
+    )
+    p.add_argument(
+        "--no-skip-heavy-val",
+        dest="skip_heavy_val",
+        action="store_false",
+        help="Run case_0004 and case_0018 (high RAM).",
+    )
+    p.set_defaults(skip_heavy_val=True)
     p.add_argument(
         "--exclude-cases",
         type=str,
         default="",
-        help="Comma-separated case_ids to skip.",
+        help="Comma-separated case_ids to skip in addition to heavy cases (when skip-heavy-val is on).",
     )
     p.add_argument("--roi-positive-threshold", type=float, default=None)
     p.add_argument("--uncertainty-threshold", type=float, default=None)
@@ -117,8 +162,25 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--roi-pad", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--min-roi-side", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--crop-size", type=int, nargs=2, default=None, metavar=("H", "W"))
-    p.add_argument("--update-mode", type=str, choices=("replace", "blend"), default=None)
-    p.add_argument("--alpha", type=float, default=None)
+    p.add_argument(
+        "--update-mode",
+        type=str,
+        choices=("replace", "blend"),
+        default=None,
+        help="Omit = replace in ROI (training-aligned metrics). blend = use meta/alpha mixing with nnU-Net prob.",
+    )
+    p.add_argument(
+        "--alpha",
+        type=float,
+        default=None,
+        help="Only for --update-mode blend (weight on refined prob).",
+    )
+    p.add_argument(
+        "--error-gate-floor",
+        type=float,
+        default=None,
+        help="Optional [0,1] floor on sigmoid(error_head) during gating (overrides meta). None = use meta / off.",
+    )
     return p.parse_args()
 
 
@@ -164,16 +226,25 @@ def main() -> None:
     meta_in_ch = int(meta.get("in_channels", 5))
     if meta_in_ch != 5:
         print(
-            f"WARNING: meta.json has in_channels={meta_in_ch}; UncertaintyUNet2d expects 5. "
+            f"WARNING: meta.json has in_channels={meta_in_ch}; uncertainty models expect 5. "
             "Load may fail unless the checkpoint matches."
         )
 
-    base = int(meta.get("base", 32))
-    ref_model = UncertaintyUNet2d(base=base).to(device)
-    load_checkpoint(ckpt_path, ref_model, optimizer=None, map_location=device)  # type: ignore[arg-type]
-
     cfg = UncertaintyConfig()
     _cfg_from_meta(cfg, meta)
+    if "use_error_head" in meta:
+        cfg.use_error_head = bool(meta["use_error_head"])
+
+    base = int(meta.get("base", 32))
+    ref_model = build_uncertainty_model(base=base, use_error_head=cfg.use_error_head).to(device)
+    load_checkpoint(
+        ckpt_path,
+        ref_model,
+        optimizer=None,
+        map_location=device,
+        strict=False,
+    )  # type: ignore[arg-type]
+
     if args.roi_positive_threshold is not None:
         cfg.roi_positive_threshold = float(args.roi_positive_threshold)
     if args.uncertainty_threshold is not None:
@@ -192,12 +263,25 @@ def main() -> None:
         cfg.update_mode = str(args.update_mode)
     if args.alpha is not None:
         cfg.alpha = float(args.alpha)
+    if args.error_gate_floor is not None:
+        cfg.error_gate_floor = float(args.error_gate_floor)
 
+    # Infer-only: training optimizes the refiner logits directly (no blend). Omitting --update-mode avoids
+    # using legacy meta defaults (blend) so full-volume metrics match the supervised objective.
+    if args.update_mode is None:
+        cfg.update_mode = "replace"
+
+    print(
+        f"Uncertainty refinement: update_mode={cfg.update_mode!r}"
+        + (f", alpha={cfg.alpha}" if cfg.update_mode.strip().lower() == "blend" else "")
+    )
+
+    perform_on_device = (device.type == "cuda") and (not args.nnunet_low_vram)
     predictor = nnUNetPredictor(
         tile_step_size=float(args.tile_step_size),
         use_gaussian=True,
         use_mirroring=not args.no_mirroring,
-        perform_everything_on_device=device.type == "cuda",
+        perform_everything_on_device=perform_on_device,
         device=device,
         verbose=False,
     )
@@ -270,18 +354,21 @@ def main() -> None:
             predictor.dataset_json,
         )
         logits = predictor.predict_logits_from_preprocessed_data(torch.from_numpy(data)).cpu()
-        probs = torch.softmax(logits.float(), dim=0).numpy()
-        prob_tumor = probs[tumor_label].astype(np.float32)
+        if args.logits_float16:
+            logits = logits.half()
+        probs = torch.softmax(logits.float(), dim=0).numpy().astype(np.float32)
+        del logits
+        gc.collect()
 
+        prob_tumor = probs[tumor_label]
         ct = data[0].astype(np.float32)
         refined_tumor = refine_tumor_probability_volume(ct, prob_tumor, ref_model, device, cfg)
 
-        probs_out = probs.copy()
-        probs_out[tumor_label] = refined_tumor
-        s = probs_out.sum(axis=0, keepdims=True)
-        probs_out = np.divide(probs_out, np.maximum(s, 1e-8))
+        probs[tumor_label] = refined_tumor
+        s = probs.sum(axis=0, keepdims=True)
+        np.divide(probs, np.maximum(s, 1e-8), out=probs)
 
-        logits_out = np.log(np.clip(probs_out, 1e-8, 1.0)).astype(np.float32)
+        logits_out = np.log(np.clip(probs, 1e-8, 1.0)).astype(np.float32)
 
         export_prediction_from_logits(
             torch.from_numpy(logits_out),
@@ -293,8 +380,10 @@ def main() -> None:
             save_probabilities=bool(args.save_probabilities),
         )
         print(f"saved {case_id}")
-        del data, props, logits, probs, logits_out, probs_out
+        del data, props, logits_out, probs
         gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

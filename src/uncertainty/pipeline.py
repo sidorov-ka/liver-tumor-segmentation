@@ -60,10 +60,13 @@ def _forward_patch(
     multi_hw: np.ndarray,
     crop_hw: tuple[int, int],
     device: torch.device,
+    cfg: UncertaintyConfig,
 ) -> np.ndarray:
     """
     Stack 5 channels: three windows + tumor prob + normalized entropy (per-channel normalize).
-    Returns refined tumor probability (h, w).
+
+    If ``cfg.use_error_head`` and the model returns two logits, apply
+    ``p = p_coarse + sigmoid(error) * (p_refine - p_coarse)`` in crop space, then resize to patch.
     """
     h, w = ct_patch_hw.shape
     p = np.clip(prob_patch_hw.astype(np.float32), 0.0, 1.0)
@@ -76,8 +79,24 @@ def _forward_patch(
     t = torch.from_numpy(tin).float().unsqueeze(0).to(device)
     t = F.interpolate(t, size=crop_hw, mode="bilinear", align_corners=False)
     with torch.no_grad():
-        logit = model(t)
-        pr = torch.sigmoid(logit)
+        raw = model(t)
+        if cfg.use_error_head and isinstance(raw, tuple):
+            logit_t, logit_e = raw[0], raw[1]
+            p_refine = torch.sigmoid(logit_t)
+            err_p = torch.sigmoid(logit_e)
+            if cfg.error_gate_floor is not None:
+                err_p = torch.clamp(err_p, min=float(cfg.error_gate_floor), max=1.0)
+            p_coarse = F.interpolate(
+                torch.from_numpy(p).float().to(device).unsqueeze(0).unsqueeze(0),
+                size=crop_hw,
+                mode="bilinear",
+                align_corners=False,
+            )
+            pr = torch.clamp(p_coarse + err_p * (p_refine - p_coarse), 0.0, 1.0)
+        elif isinstance(raw, tuple):
+            pr = torch.sigmoid(raw[0])
+        else:
+            pr = torch.sigmoid(raw)
     pr = F.interpolate(pr, size=(h, w), mode="bilinear", align_corners=False)
     return pr[0, 0].cpu().numpy().astype(np.float32)
 
@@ -158,6 +177,7 @@ def _refine_one_bbox(
             multi,
             (h_crop, w_crop),
             device,
+            cfg,
         )
         if alpha >= 1.0 - 1e-7:
             out[z, y0:y1, x0:x1] = pr_new

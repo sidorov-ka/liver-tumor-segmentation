@@ -54,14 +54,19 @@ def _resize_gt(
     x5: np.ndarray,
     gt: np.ndarray,
     size: Tuple[int, int],
-) -> Tuple[np.ndarray, np.ndarray]:
+    err: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     h, w = size
     t = torch.from_numpy(x5).float().unsqueeze(0)
     t = F.interpolate(t, size=(h, w), mode="bilinear", align_corners=False)
     x5_r = t[0].numpy()
     gt_t = torch.from_numpy(gt.astype(np.float32))[None, None]
     gt_r = F.interpolate(gt_t, size=(h, w), mode="nearest")[0, 0].numpy()
-    return x5_r, gt_r
+    if err is not None:
+        e_t = torch.from_numpy(err.astype(np.float32))[None, None]
+        err_r = F.interpolate(e_t, size=(h, w), mode="nearest")[0, 0].numpy()
+        return x5_r, gt_r, err_r
+    return x5_r, gt_r, None
 
 
 def slice_has_infer_roi(coarse_hw: np.ndarray, cfg: UncertaintyConfig) -> bool:
@@ -94,6 +99,7 @@ class UncertaintySliceDataset(Dataset):
     Each sample:
       input: (5, H, W) — three window-normalized CT + coarse prob + normalized entropy
       target: (1, H, W) — GT tumor binary
+      optional ``y_error``: (1, H, W) — XOR(coarse_binary, GT_binary) if ``use_error_head``.
     """
 
     def __init__(
@@ -106,6 +112,7 @@ class UncertaintySliceDataset(Dataset):
         roi_mode: str = "infer",
         roi_pad_xy: Tuple[int, int] = (16, 16),
         min_roi_xy: Tuple[int, int] = (32, 32),
+        use_error_head: bool = False,
     ):
         self.manifest = manifest
         self.u_cfg = u_cfg
@@ -115,6 +122,7 @@ class UncertaintySliceDataset(Dataset):
         self.roi_mode = roi_mode
         self.roi_pad_xy = roi_pad_xy
         self.min_roi_xy = min_roi_xy
+        self.use_error_head = use_error_head
 
     def __len__(self) -> int:
         return len(self.manifest)
@@ -162,15 +170,26 @@ class UncertaintySliceDataset(Dataset):
                     gt = gt[y0:y1, x0:x1]
 
         x5 = _build_uncertainty_x(img, coarse, self.u_cfg.hu_windows)
-        x5, gt = _resize_gt(x5, gt, self.crop_size)
+        coarse_bin = (coarse > 0.5).astype(np.float32)
+        err_hw: Optional[np.ndarray] = (
+            (coarse_bin != gt).astype(np.float32) if self.use_error_head else None
+        )
+        x5, gt, err_r = _resize_gt(x5, gt, self.crop_size, err=err_hw)
+        if err_r is not None:
+            y_err = err_r[None, ...].astype(np.float32)
+        else:
+            y_err = None
         y = gt[None, ...].astype(np.float32)
 
-        return {
+        out: Dict[str, Any] = {
             "x": torch.from_numpy(x5),
             "y": torch.from_numpy(y),
             "case_id": case_id,
             "npz_path": str(p),
         }
+        if y_err is not None:
+            out["y_error"] = torch.from_numpy(y_err)
+        return out
 
 
 def load_manifest(export_root: Path) -> Tuple[List[Path], List[Path]]:
@@ -191,6 +210,7 @@ def build_uncertainty_datasets(
     roi_pad_xy: Tuple[int, int] = (16, 16),
     min_roi_xy: Tuple[int, int] = (32, 32),
     max_train: Optional[int] = None,
+    use_error_head: bool = False,
 ) -> Tuple[UncertaintySliceDataset, UncertaintySliceDataset]:
     train_paths, val_paths = load_manifest(export_root)
     if roi_mode == "infer" and roi_aligned and use_coarse_prob:
@@ -206,6 +226,7 @@ def build_uncertainty_datasets(
         roi_mode=roi_mode,
         roi_pad_xy=roi_pad_xy,
         min_roi_xy=min_roi_xy,
+        use_error_head=use_error_head,
     )
     train_ds = UncertaintySliceDataset(train_paths, **common)
     val_ds = UncertaintySliceDataset(val_paths, **common)

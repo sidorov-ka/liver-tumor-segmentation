@@ -55,6 +55,10 @@ class TinyUNet2d(nn.Module):
         self.out_conv = nn.Conv2d(base, 1, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.out_conv(self.forward_features(x))
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Decoder output before the final 1×1 (for multi-head refiners, e.g. uncertainty error head)."""
         c1 = self.enc1(x)
         p1 = self.pool(c1)
         c2 = self.enc2(p1)
@@ -80,9 +84,7 @@ class TinyUNet2d(nn.Module):
 
         u1 = self.up1(d2)
         u1 = self._match_pad(u1, c1)
-        d1 = self.dec1(torch.cat([u1, c1], dim=1))
-
-        return self.out_conv(d1)
+        return self.dec1(torch.cat([u1, c1], dim=1))
 
     @staticmethod
     def _match_pad(up: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:

@@ -1,4 +1,4 @@
-"""Train / validate UncertaintyUNet2d; output under ``results_uncertainty/.../uncertainty/run_*``."""
+"""Train / validate uncertainty stage-2; output under ``results_uncertainty/.../uncertainty/run_*``."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -14,18 +14,30 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from coarse_to_fine.metrics import BinaryConfusion, merge_per_case_metrics
-from coarse_to_fine.utils import bce_dice_boundary_loss, dice_coefficient, save_checkpoint
-from uncertainty.model import UncertaintyUNet2d
+from coarse_to_fine.utils import bce_dice_boundary_loss, bce_dice_loss, dice_coefficient, save_checkpoint
+from uncertainty.model import build_uncertainty_model
 
 LABEL_TUMOR = "2"
 
 
 def uncertainty_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
-    return {
+    out: Dict[str, Any] = {
         "x": torch.stack([b["x"] for b in batch]),
         "y": torch.stack([b["y"] for b in batch]),
         "case_id": [b["case_id"] for b in batch],
     }
+    if "y_error" in batch[0]:
+        out["y_error"] = torch.stack([b["y_error"] for b in batch])
+    return out
+
+
+def _forward_tumor(
+    model: nn.Module, x: torch.Tensor
+) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    out = model(x)
+    if isinstance(out, tuple):
+        return out[0], out[1]
+    return out, None
 
 
 def train_one_epoch(
@@ -35,6 +47,8 @@ def train_one_epoch(
     device: torch.device,
     bce_weight: float = 0.5,
     boundary_weight: float = 0.0,
+    lambda_error: float = 0.3,
+    use_error_head: bool = False,
 ) -> Dict[str, float]:
     model.train()
     loss_sum = 0.0
@@ -43,15 +57,24 @@ def train_one_epoch(
     for batch in tqdm(loader, desc="train", leave=False):
         x = batch["x"].to(device)
         y = batch["y"].to(device)
+        y_err = batch.get("y_error")
+        if use_error_head and y_err is None:
+            raise RuntimeError("use_error_head but batch has no y_error")
         optimizer.zero_grad(set_to_none=True)
-        logits = model(x)
-        loss = bce_dice_boundary_loss(
-            logits, y, bce_weight=bce_weight, boundary_weight=boundary_weight
+        logit_t, logit_e = _forward_tumor(model, x)
+        loss_t = bce_dice_boundary_loss(
+            logit_t, y, bce_weight=bce_weight, boundary_weight=boundary_weight
         )
+        if use_error_head and logit_e is not None and y_err is not None:
+            ye = y_err.to(device)
+            loss_e = bce_dice_loss(logit_e, ye, bce_weight=bce_weight)
+            loss = loss_t + float(lambda_error) * loss_e
+        else:
+            loss = loss_t
         loss.backward()
         optimizer.step()
         with torch.no_grad():
-            prob = torch.sigmoid(logits)
+            prob = torch.sigmoid(logit_t)
             d = dice_coefficient(prob, y).mean().item()
         bs = x.size(0)
         loss_sum += loss.item() * bs
@@ -67,6 +90,8 @@ def validate_detailed(
     device: torch.device,
     bce_weight: float = 0.5,
     boundary_weight: float = 0.0,
+    lambda_error: float = 0.3,
+    use_error_head: bool = False,
 ) -> Dict[str, Any]:
     model.eval()
     loss_sum = 0.0
@@ -78,12 +103,19 @@ def validate_detailed(
     for batch in tqdm(loader, desc="val", leave=False):
         x = batch["x"].to(device)
         y = batch["y"].to(device)
+        y_err = batch.get("y_error")
         case_ids: List[str] = batch["case_id"]
-        logits = model(x)
-        loss = bce_dice_boundary_loss(
-            logits, y, bce_weight=bce_weight, boundary_weight=boundary_weight
+        logit_t, logit_e = _forward_tumor(model, x)
+        loss_t = bce_dice_boundary_loss(
+            logit_t, y, bce_weight=bce_weight, boundary_weight=boundary_weight
         )
-        prob = torch.sigmoid(logits)
+        if use_error_head and logit_e is not None and y_err is not None:
+            ye = y_err.to(device)
+            loss_e = bce_dice_loss(logit_e, ye, bce_weight=bce_weight)
+            loss = loss_t + float(lambda_error) * loss_e
+        else:
+            loss = loss_t
+        prob = torch.sigmoid(logit_t)
         d = dice_coefficient(prob, y).mean().item()
         bs = x.size(0)
         loss_sum += loss.item() * bs
@@ -121,13 +153,15 @@ def run_training(
     bce_weight: float = 0.5,
     boundary_weight: float = 0.0,
     training_args: Optional[Dict[str, Any]] = None,
+    use_error_head: bool = False,
+    lambda_error: float = 0.3,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     val_dir = out_dir / "validation"
     val_dir.mkdir(parents=True, exist_ok=True)
 
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = UncertaintyUNet2d(base=base).to(device)
+    model = build_uncertainty_model(base=base, use_error_head=use_error_head).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     best_dice = -1.0
@@ -144,8 +178,15 @@ def run_training(
             print(msg)
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
+    arch = "UncertaintyDualHeadUNet2d" if use_error_head else "UncertaintyUNet2d"
     log(
-        f"UncertaintyUNet2d — 5 ch (3 HU + prob + entropy); loss BCE+Dice + boundary_weight={boundary_weight}; aligned with infer_uncertainty.",
+        f"{arch} — 5 ch (3 HU + prob + entropy)"
+        + (
+            f"; + error head; lambda_error={lambda_error}; "
+            if use_error_head
+            else "; "
+        )
+        + f"loss BCE+Dice + boundary_weight={boundary_weight}; aligned with infer_uncertainty.",
         also_print=True,
     )
     if training_args:
@@ -161,9 +202,24 @@ def run_training(
         log(f"Current learning rate: {optimizer.param_groups[0]['lr']:.6f}", also_print=False)
 
         tr = train_one_epoch(
-            model, train_loader, optimizer, device, bce_weight, boundary_weight
+            model,
+            train_loader,
+            optimizer,
+            device,
+            bce_weight,
+            boundary_weight,
+            lambda_error=lambda_error,
+            use_error_head=use_error_head,
         )
-        va = validate_detailed(model, val_loader, device, bce_weight, boundary_weight)
+        va = validate_detailed(
+            model,
+            val_loader,
+            device,
+            bce_weight,
+            boundary_weight,
+            lambda_error=lambda_error,
+            use_error_head=use_error_head,
+        )
         elapsed = time.perf_counter() - t0
 
         gc = va["global_confusion"]

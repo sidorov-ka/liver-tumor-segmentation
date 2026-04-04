@@ -122,9 +122,10 @@ def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer | None = None,
     map_location: str | torch.device | None = None,
+    strict: bool = True,
 ) -> Dict[str, Any]:
     ckpt = torch.load(path, map_location=map_location, weights_only=False)
-    model.load_state_dict(ckpt["model_state_dict"])
+    model.load_state_dict(ckpt["model_state_dict"], strict=strict)
     if optimizer is not None and "optimizer_state_dict" in ckpt:
         optimizer.load_state_dict(ckpt["optimizer_state_dict"])
     return ckpt

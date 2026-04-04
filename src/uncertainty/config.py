@@ -29,7 +29,8 @@ class UncertaintyConfig:
     uncertainty_threshold: Optional[float] = None
     prob_min_for_uncertainty_union: float = 0.05
 
-    min_component_voxels: int = 64
+    # Lower = more small 3D CCs get refined (stronger coverage of fragmented tumor).
+    min_component_voxels: int = 48
     roi_pad: Tuple[int, int, int] = (2, 24, 24)
     min_roi_side: Tuple[int, int, int] = (1, 32, 32)
 
@@ -38,6 +39,12 @@ class UncertaintyConfig:
 
     update_mode: str = "blend"
     alpha: float = 0.5
+
+    # Dual-head (error) training / inference — see UncertaintyDualHeadUNet2d (train defaults to on via CLI).
+    use_error_head: bool = False
+    lambda_error: float = 0.3
+    # Optional: floor error gate in [0,1] on inference (None = off).
+    error_gate_floor: Optional[float] = None
 
 
 def uncertainty_config_to_json_dict(cfg: UncertaintyConfig) -> Dict[str, Any]:
@@ -52,6 +59,9 @@ def uncertainty_config_to_json_dict(cfg: UncertaintyConfig) -> Dict[str, Any]:
         "crop_size": list(cfg.crop_size),
         "update_mode": cfg.update_mode,
         "alpha": cfg.alpha,
+        "use_error_head": cfg.use_error_head,
+        "lambda_error": cfg.lambda_error,
+        "error_gate_floor": cfg.error_gate_floor,
     }
 
 
@@ -80,3 +90,10 @@ def merge_uncertainty_config_from_meta_dict(cfg: UncertaintyConfig, mc: dict) ->
         cfg.update_mode = str(mc["update_mode"])
     if "alpha" in mc:
         cfg.alpha = float(mc["alpha"])
+    if "use_error_head" in mc:
+        cfg.use_error_head = bool(mc["use_error_head"])
+    if "lambda_error" in mc:
+        cfg.lambda_error = float(mc["lambda_error"])
+    if "error_gate_floor" in mc:
+        v = mc["error_gate_floor"]
+        cfg.error_gate_floor = None if v is None else float(v)

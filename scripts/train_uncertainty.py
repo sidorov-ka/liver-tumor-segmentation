@@ -81,6 +81,17 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--min-roi-side-3d", type=int, nargs=3, default=None, metavar=("Z", "Y", "X"))
     p.add_argument("--update-mode", type=str, choices=("replace", "blend"), default=None)
     p.add_argument("--alpha", type=float, default=None)
+    p.add_argument(
+        "--no-error-head",
+        action="store_true",
+        help="Train single-head model (no baseline-error prediction). Default: dual-head on.",
+    )
+    p.add_argument(
+        "--lambda-error",
+        type=float,
+        default=None,
+        help="Weight for error-head loss (default: UncertaintyConfig.lambda_error).",
+    )
     return p.parse_args()
 
 
@@ -108,6 +119,8 @@ def _apply_u_cfg_args(cfg: UncertaintyConfig, args: argparse.Namespace) -> None:
         cfg.update_mode = str(args.update_mode)
     if args.alpha is not None:
         cfg.alpha = float(args.alpha)
+    if getattr(args, "lambda_error", None) is not None:
+        cfg.lambda_error = float(args.lambda_error)
 
 
 def main() -> None:
@@ -118,6 +131,8 @@ def main() -> None:
 
     u_cfg = UncertaintyConfig()
     _apply_u_cfg_args(u_cfg, args)
+    use_error_head = not bool(args.no_error_head)
+    u_cfg.use_error_head = use_error_head
 
     if args.out_dir is None:
         stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -154,6 +169,7 @@ def main() -> None:
         roi_pad_xy=roi_pad_xy,
         min_roi_xy=min_roi_xy,
         max_train=args.max_train,
+        use_error_head=use_error_head,
     )
     if len(train_ds) == 0:
         hint = ""
@@ -167,7 +183,7 @@ def main() -> None:
         raise ValueError("val/ has no usable .npz files.")
     print(
         f"Uncertainty dataset: train={len(train_ds)} val={len(val_ds)} "
-        f"(roi_mode={args.roi_mode}, roi_aligned={roi_aligned})"
+        f"(roi_mode={args.roi_mode}, roi_aligned={roi_aligned}, use_error_head={use_error_head})"
     )
 
     train_loader = DataLoader(
@@ -208,6 +224,8 @@ def main() -> None:
         "bce_weight": args.bce_weight,
         "boundary_weight": args.boundary_weight,
         "max_train": args.max_train,
+        "use_error_head": use_error_head,
+        "lambda_error": float(u_cfg.lambda_error),
     }
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -222,10 +240,14 @@ def main() -> None:
         bce_weight=args.bce_weight,
         boundary_weight=float(args.boundary_weight),
         training_args=training_args,
+        use_error_head=use_error_head,
+        lambda_error=float(u_cfg.lambda_error),
     )
 
     meta = {
         "in_channels": 5,
+        "use_error_head": use_error_head,
+        "lambda_error": float(u_cfg.lambda_error),
         "dataset_folder": args.dataset_folder,
         "fold": args.fold,
         "run_layout": f"{DEFAULT_UNCERTAINTY_RESULTS_ROOT}/<dataset>/fold_<n>/{UNCERTAINTY_TASK_DIR}/run_<timestamp>",

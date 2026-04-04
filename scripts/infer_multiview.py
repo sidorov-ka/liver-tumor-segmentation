@@ -10,7 +10,8 @@ produced by ``scripts/train_multiview.py`` (``results_multiview/.../multiview/ru
 Runs the same nnU-Net forward on preprocessed data as scripts/infer_coarse_to_fine.py (aligned shapes), then
 updates the tumor-class probability channel inside suspicious ROIs (replace or blend with nnU-Net prob;
 see ``MultiviewConfig``); outside ROIs the tumor channel stays the nnU-Net softmax. Writes only under ``-o``.
-Use ``--skip-heavy-val`` or ``--exclude-cases`` to omit large cases without a separate input folder.
+By default ``case_0004`` and ``case_0018`` are skipped (very large volumes); use ``--no-skip-heavy-val`` to include them.
+``--exclude-cases`` adds more IDs to skip.
 """
 
 from __future__ import annotations
@@ -136,14 +137,22 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--skip-existing", action="store_true")
     p.add_argument(
         "--skip-heavy-val",
+        dest="skip_heavy_val",
         action="store_true",
-        help="Skip case_0004 and case_0018 (very large volumes; typical nnU-Net tile count >3000 on fold 0 val).",
+        help="Skip case_0004 and case_0018 (very large volumes). Default: on; use --no-skip-heavy-val to run them.",
     )
+    p.add_argument(
+        "--no-skip-heavy-val",
+        dest="skip_heavy_val",
+        action="store_false",
+        help="Run case_0004 and case_0018 (high RAM).",
+    )
+    p.set_defaults(skip_heavy_val=True)
     p.add_argument(
         "--exclude-cases",
         type=str,
         default="",
-        help="Comma-separated case_ids to skip in addition to --skip-heavy-val (e.g. case_0004,case_0018).",
+        help="Comma-separated case_ids to skip in addition to heavy cases (when skip-heavy-val is on).",
     )
     # Multiview hyperparameters
     p.add_argument("--prob-lo", type=float, default=None)
