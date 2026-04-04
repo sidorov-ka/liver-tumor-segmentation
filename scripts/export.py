@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Export **only from the base nnU-Net model** (stage 1): predictions + paired preprocessed slices
-for later ``train_coarse_to_fine`` / ``train_multiview``. Later stages do not change this script or the base checkpoint.
+Export nnU-Net v2 (Isensee et al.) stage-1 predictions + paired slices for stage-2 scripts
+(coarse_to_fine, multiview, uncertainty).
 
-Uses the same preprocessing as nnU-Net training so tensors align with logits. Default tile step
-matches ``scripts/infer_coarse_to_fine.py`` (0.75). If you already exported for a given nnU-Net run, keep using
-that tree; re-run export only when the base model, data, or export settings change.
+Tensors align with nnU-Net training; default tile step ``0.75`` matches ``infer_coarse_to_fine``. Re-export if the base model, data, or export options change.
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ DEFAULT_TILE_STEP_SIZE = 0.75
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export stage-1 nnU-Net preds for train_coarse_to_fine / train_multiview (train/val slices)."
+        description="Export stage-1 nnU-Net preds for train_coarse_to_fine / train_multiview / train_uncertainty (train/val slices)."
     )
     p.add_argument(
         "--nnunet-raw",

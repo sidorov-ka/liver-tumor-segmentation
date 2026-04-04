@@ -36,6 +36,56 @@ def bce_dice_loss(
     return bce_weight * bce + (1.0 - bce_weight) * dice
 
 
+def sobel_magnitude(x: torch.Tensor) -> torch.Tensor:
+    """Sobel edge magnitude for (N, 1, H, W) maps in [0, 1]."""
+    device, dtype = x.device, x.dtype
+    kx = torch.tensor(
+        [[[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]]],
+        device=device,
+        dtype=dtype,
+    ).view(1, 1, 3, 3)
+    ky = torch.tensor(
+        [[[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]]],
+        device=device,
+        dtype=dtype,
+    ).view(1, 1, 3, 3)
+    gx = F.conv2d(x, kx, padding=1)
+    gy = F.conv2d(x, ky, padding=1)
+    return torch.sqrt(gx * gx + gy * gy + 1e-8)
+
+
+def boundary_alignment_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    Mean |edge(pred) - edge(target)| on Sobel magnitudes. Differentiable 2D surrogate for
+    crisper / more coherent region boundaries (helps reduce spurious gaps on-slice).
+    pred, target: (N, 1, H, W) in [0, 1].
+    """
+    ep = sobel_magnitude(pred)
+    et = sobel_magnitude(target)
+    return (ep - et).abs().mean()
+
+
+def bce_dice_boundary_loss(
+    logits: torch.Tensor,
+    target: torch.Tensor,
+    bce_weight: float = 0.5,
+    boundary_weight: float = 0.0,
+) -> torch.Tensor:
+    """
+    Let ``base = bce_weight * BCE + (1 - bce_weight) * Dice`` (same as :func:`bce_dice_loss`).
+    If ``boundary_weight`` > 0: returns ``(1 - boundary_weight) * base + boundary_weight * boundary``,
+    where ``boundary`` is mean |Sobel(pred)| - |Sobel(target)| (:func:`boundary_alignment_loss`).
+    """
+    bce = F.binary_cross_entropy_with_logits(logits, target)
+    prob = torch.sigmoid(logits)
+    dice = dice_loss(prob, target)
+    base = bce_weight * bce + (1.0 - bce_weight) * dice
+    if boundary_weight <= 0.0:
+        return base
+    bnd = boundary_alignment_loss(prob, target)
+    return (1.0 - boundary_weight) * base + boundary_weight * bnd
+
+
 def save_json(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

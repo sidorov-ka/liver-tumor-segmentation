@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Train UncertaintyUNet2d (stage 2) on the same .npz export as coarse_to_fine / multiview.
 #
-# Default export dir: <repo>/coarse_to_fine_export/slices — override with:
+# Default export dir: <repo>/refinement_export/fold0 — override:
 #   EXPORT_DIR=/path/to/slices bash scripts/train_uncertainty.sh
+# Interpreter: PYTHON=python3 (default) or PYTHON=python
 # Extra args are passed through: bash scripts/train_uncertainty.sh --epochs 50
 set -euo pipefail
 
@@ -11,6 +12,7 @@ cd "${REPO_ROOT}"
 
 export PYTHONPATH="${REPO_ROOT}/src:${PYTHONPATH:-}"
 
-EXPORT_DIR="${EXPORT_DIR:-${REPO_ROOT}/coarse_to_fine_export/slices}"
+EXPORT_DIR="${EXPORT_DIR:-${REPO_ROOT}/refinement_export/fold0}"
 
-exec python "${REPO_ROOT}/scripts/train_uncertainty.py" --export-dir "${EXPORT_DIR}" "$@"
+PYTHON="${PYTHON:-python3}"
+exec "${PYTHON}" "${REPO_ROOT}/scripts/train_uncertainty.py" --export-dir "${EXPORT_DIR}" "$@"

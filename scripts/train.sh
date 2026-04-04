@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stage 1 only: nnU-Net v2 for Dataset001_LiverTumor — plan, preprocess (2d, splits_final.json), train fold 0.
-# Second stages (coarse_to_fine / multiview) use scripts/export.py then scripts/train_coarse_to_fine.sh or train_multiview.sh.
+# Second stages use scripts/export.py then train_coarse_to_fine.sh, train_multiview.sh, and/or train_uncertainty.sh.
 # Skip heavy preprocessing if cache is already valid: bash scripts/train.sh --skip-preprocess
 # or: SKIP_NNUNET_PREPROCESS=1 bash scripts/train.sh
 set -euo pipefail

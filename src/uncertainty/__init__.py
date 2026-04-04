@@ -1,4 +1,4 @@
-"""Uncertainty-guided refinement: coarse-tumor ROI + entropy channel + UncertaintyUNet2d."""
+"""UncertaintyUNet2d: coarse-tumor ROI + entropy channel (stage 2)."""
 
 from uncertainty.config import UncertaintyConfig
 from uncertainty.model import UncertaintyUNet2d

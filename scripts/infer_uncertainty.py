@@ -3,7 +3,7 @@
 Uncertainty-guided inference: coarse-tumor (± optional high-entropy) ROIs + 5-channel 2D refinement.
 
 Uses **UncertaintyUNet2d** (5 ch: three HU windows + tumor prob + normalized entropy). Train with
-``scripts/train_uncertainty.py``; point ``--uncertainty-dir`` at ``uncertainty_results/.../uncertainty/run_*``.
+``scripts/train_uncertainty.py``; point ``--uncertainty-dir`` at ``results_uncertainty/.../uncertainty/run_*``.
 
 Pipeline: nnU-Net logits → softmax → tumor prob → entropy U(p) → ROI from coarse mask (not uncertainty-only) →
 refinement inside ROI → blend/replace → renormalize softmax → export under ``-o`` (e.g. inference_comparison/uncertainty).
@@ -84,7 +84,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         dest="uncertainty_dir",
-        help="Uncertainty training run: checkpoint_best.pth + meta.json (5 ch), e.g. uncertainty_results/.../run_*.",
+        help="Uncertainty training run: checkpoint_best.pth + meta.json (5 ch), e.g. results_uncertainty/.../run_*.",
     )
     p.add_argument(
         "-o",

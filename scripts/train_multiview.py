@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-"""Train MultiviewUNet2d on exported .npz slices (same export as coarse_to_fine: scripts/export.py).
+"""Train MultiviewUNet2d on ``scripts/export.py`` .npz slices (4 ch: 3 HU windows + tumor prob).
 
-Four input channels: three fixed HU windows + nnU-Net tumor **probability**, per-channel normalized
-like ``infer_multiview`` / ``multiview.pipeline``. Writes under ``multiview_results/`` only.
-
-Use the resulting ``checkpoint_best.pth`` + ``meta.json`` with ``scripts/infer_multiview.py --multiview-dir ...``.
-
-Suspicious ROI + post-refine settings default from ``MultiviewConfig`` (single source with infer):
-primary band ``prob_lo``/``prob_hi``, optional high band ``0.78``–``0.95``, blend with
-``refine_alpha=0.5``, size split at 8000 voxels, ``alpha_blend_small``/``large`` 0.8/0.35,
-``post_remove_tumor_components_below_voxels=32``. Override via CLI flags if needed.
+Multi-window fusion as in e.g. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* (IEEE TMI).
+Normalization matches ``infer_multiview``. Output: ``results_multiview/.../multiview/run_*`` with
+``checkpoint_best.pth`` and ``meta.json``. ROI and blend defaults: ``MultiviewConfig`` (override via CLI).
 """
 
 from __future__ import annotations

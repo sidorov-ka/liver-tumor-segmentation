@@ -23,10 +23,14 @@ def binary_entropy_probability(
     ``p`` is tumor probability in [0, 1]. For numerical stability, probabilities are
     clamped to ``[eps, 1 - eps]`` when ``clamp`` is True.
 
+    Intermediate math uses float64 so ``1.0 - eps`` does not round to 1.0 in float32
+    (which caused ``log(0)`` warnings).
+
     Returns the same shape as ``p``, float32. Extend later with MC-dropout / ensemble
     by adding sibling functions that map logits/samples to U without changing this API.
     """
-    x = p.astype(np.float32)
+    out_dtype = np.dtype(p.dtype) if np.issubdtype(p.dtype, np.floating) else np.float32
+    x = p.astype(np.float64, copy=False)
     if clamp:
         x = np.clip(x, eps, 1.0 - eps)
     else:
@@ -36,7 +40,7 @@ def binary_entropy_probability(
     log1p = np.log(x)
     log1m = np.log(1.0 - x)
     u = -(x * log1p + (1.0 - x) * log1m)
-    return u.astype(np.float32)
+    return u.astype(out_dtype, copy=False)
 
 
 def binary_entropy_probability_torch(
@@ -46,14 +50,16 @@ def binary_entropy_probability_torch(
     clamp: bool = True,
 ) -> torch.Tensor:
     """PyTorch variant of :func:`binary_entropy_probability` (same formula)."""
-    x = p.float()
+    dt = p.dtype
+    x = p.double()
     if clamp:
         x = torch.clamp(x, eps, 1.0 - eps)
     else:
         x = torch.clamp(x, 0.0, 1.0)
         x = torch.where(x <= 0, torch.full_like(x, eps), x)
         x = torch.where(x >= 1, torch.full_like(x, 1.0 - eps), x)
-    return -(x * torch.log(x) + (1.0 - x) * torch.log(1.0 - x))
+    u = -(x * torch.log(x) + (1.0 - x) * torch.log(1.0 - x))
+    return u.to(dtype=dt)
 
 
 def normalize_entropy_01(u: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:

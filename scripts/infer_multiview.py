@@ -5,7 +5,7 @@ Multiview inference: suspicious-voxel ROIs + multi-window 2D refinement (nnU-Net
 Uses **MultiviewUNet2d** (4 ch: three fixed HU windows + tumor prob) trained **separately** from
 coarse_to_fine — see multi-view fusion literature (e.g. *Deep Multi-View Fusion Network for Lung
 Nodule Segmentation*). Do not point ``--multiview-dir`` at a coarse_to_fine run; use a checkpoint
-produced by ``scripts/train_multiview.py`` (``multiview_results/.../multiview/run_*``).
+produced by ``scripts/train_multiview.py`` (``results_multiview/.../multiview/run_*``).
 
 Runs the same nnU-Net forward on preprocessed data as scripts/infer_coarse_to_fine.py (aligned shapes), then
 updates the tumor-class probability channel inside suspicious ROIs (replace or blend with nnU-Net prob;
@@ -89,8 +89,8 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         required=True,
         dest="multiview_dir",
-        help="Multiview training run only (not coarse_to_fine_results): checkpoint_best.pth + meta.json "
-        "for MultiviewUNet2d (in_channels=4), e.g. multiview_results/.../multiview/run_<timestamp>.",
+        help="Multiview training run only (not results_coarse_to_fine): checkpoint_best.pth + meta.json "
+        "for MultiviewUNet2d (in_channels=4), e.g. results_multiview/.../multiview/run_<timestamp>.",
     )
     p.add_argument(
         "-o",

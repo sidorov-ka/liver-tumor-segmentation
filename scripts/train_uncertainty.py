@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Train UncertaintyUNet2d on exported .npz slices (same export as coarse_to_fine: scripts/export.py).
+"""Train UncertaintyUNet2d on ``export.py`` .npz (5 ch: 3 HU + tumor prob + normalized entropy).
 
-Five channels: three HU windows + nnU-Net tumor probability + normalized entropy U(p)/log(2).
-ROI matches ``infer_uncertainty`` (coarse tumor seed ± optional uncertainty union). Writes under
-``uncertainty_results/`` only.
+ROI matches ``infer_uncertainty``. Output: ``results_uncertainty/.../uncertainty/run_*``.
 """
 
 from __future__ import annotations
@@ -67,6 +65,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--roi-pad", type=int, nargs=2, default=[16, 16], metavar=("Y", "X"))
     p.add_argument("--min-roi", type=int, nargs=2, default=[32, 32], metavar=("Y", "X"))
     p.add_argument("--bce-weight", type=float, default=0.5)
+    p.add_argument(
+        "--boundary-weight",
+        type=float,
+        default=0.15,
+        help="Weight for Sobel boundary-alignment term (0 = off, same as pure BCE+Dice).",
+    )
     p.add_argument("--max-train", type=int, default=None)
     # UncertaintyConfig
     p.add_argument("--roi-positive-threshold", type=float, default=None)
@@ -202,6 +206,7 @@ def main() -> None:
         "min_roi_xy": list(min_roi_xy),
         "uncertainty_config": uncertainty_config_to_json_dict(u_cfg),
         "bce_weight": args.bce_weight,
+        "boundary_weight": args.boundary_weight,
         "max_train": args.max_train,
     }
 
@@ -215,6 +220,7 @@ def main() -> None:
         lr=args.lr,
         device=device,
         bce_weight=args.bce_weight,
+        boundary_weight=float(args.boundary_weight),
         training_args=training_args,
     )
 
@@ -232,6 +238,7 @@ def main() -> None:
         "roi_pad_xy": list(roi_pad_xy),
         "min_roi_xy": list(min_roi_xy),
         "uncertainty_config": training_args["uncertainty_config"],
+        "boundary_weight": float(args.boundary_weight),
         "export_dir": str(export_dir.resolve()),
         "best_checkpoint": str(best.resolve()),
         "validation_summary": str((out_dir / "validation" / "summary.json").resolve()),

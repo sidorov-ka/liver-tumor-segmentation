@@ -1,4 +1,7 @@
-"""Train / validate coarse-to-fine model; logs under coarse_to_fine_results/.../coarse_to_fine/run_*/."""
+"""Train / validate coarse-to-fine TinyUNet2d; output under ``results_coarse_to_fine/.../coarse_to_fine/run_*``.
+
+Related idea: Li et al., *Universal Topology Refinement* (UTR), arXiv:2409.09796.
+"""
 
 from __future__ import annotations
 
@@ -139,11 +142,8 @@ def run_training(
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
     log(
-        "#######################################################################\n"
-        "Coarse-to-fine stage 2 — binary tumor refinement (prob map + ROI-aligned crops by default; "
-        "see Li et al. UTR arXiv:2409.09796 for probability refinement idea). Not nnU-Net; "
-        "metrics layout is compatible with nnU-Net validation summary.\n"
-        "#######################################################################",
+        "Coarse-to-fine stage 2 — binary tumor (2 ch: CT + nnU-Net prob, ROI crops); "
+        "see Li et al. UTR arXiv:2409.09796; aligned with infer_coarse_to_fine.",
         also_print=True,
     )
     if training_args:
@@ -205,7 +205,7 @@ def run_training(
                 "mean": {LABEL_TUMOR: {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}},
                 "metric_per_case": per_case_list,
                 "best_epoch": epoch,
-                "note": "Metrics on resized ROI tensors (crop_size, ROI-aligned with infer by default). See meta.json use_coarse_prob, roi_aligned.",
+                "note": "Val metrics on ROI crops; see meta.json / training_args.json (use_coarse_prob, roi_aligned).",
             }
             (val_dir / "summary.json").write_text(
                 json.dumps(best_summary, indent=2),

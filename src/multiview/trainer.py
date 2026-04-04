@@ -1,4 +1,7 @@
-"""Train / validate MultiviewUNet2d; layout mirrors coarse_to_fine under multiview_results/.../multiview/run_*/."""
+"""Train / validate MultiviewUNet2d; output under ``results_multiview/.../multiview/run_*``.
+
+Multi-view CT fusion: e.g. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* (IEEE TMI).
+"""
 
 from __future__ import annotations
 
@@ -138,11 +141,8 @@ def run_training(
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
     log(
-        "#######################################################################\n"
-        "Multiview stage — binary tumor refinement (4 ch: 3 HU windows + nnU-Net tumor prob). "
-        "Input matches infer_multiview (per-channel normalize after windowing). "
-        "Not nnU-Net; metrics layout compatible with coarse_to_fine validation summary.\n"
-        "#######################################################################",
+        "MultiviewUNet2d — 4 ch (3 HU + tumor prob); multi-view fusion (e.g. IEEE TMI lung nodule paper); "
+        "aligned with infer_multiview.",
         also_print=True,
     )
     if training_args:
@@ -195,7 +195,7 @@ def run_training(
                 "mean": {LABEL_TUMOR: {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}},
                 "metric_per_case": per_case_list,
                 "best_epoch": epoch,
-                "note": "Metrics on resized ROI tensors (4 ch). See meta.json hu_windows, crop_size.",
+                "note": "Val metrics on 4-channel ROI crops; see meta.json / training_args.json.",
             }
             (val_dir / "summary.json").write_text(
                 json.dumps(best_summary, indent=2),

@@ -1,7 +1,7 @@
 """
 Uncertainty-guided 2D U-Net for ROI tumor refinement — independent of coarse_to_fine / multiview.
 
-Five input channels: three fixed HU windows + nnU-Net tumor probability + normalized entropy U(p).
+Five input channels: three fixed HU windows + nnU-Net tumor probability + normalized Bernoulli entropy U(p).
 Output: one logit map (sigmoid → refined probability).
 """
 

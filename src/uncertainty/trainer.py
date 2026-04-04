@@ -1,4 +1,4 @@
-"""Train / validate UncertaintyUNet2d; layout under uncertainty_results/.../uncertainty/run_*/."""
+"""Train / validate UncertaintyUNet2d; output under ``results_uncertainty/.../uncertainty/run_*``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from coarse_to_fine.metrics import BinaryConfusion, merge_per_case_metrics
-from coarse_to_fine.utils import bce_dice_loss, dice_coefficient, save_checkpoint
+from coarse_to_fine.utils import bce_dice_boundary_loss, dice_coefficient, save_checkpoint
 from uncertainty.model import UncertaintyUNet2d
 
 LABEL_TUMOR = "2"
@@ -34,6 +34,7 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     bce_weight: float = 0.5,
+    boundary_weight: float = 0.0,
 ) -> Dict[str, float]:
     model.train()
     loss_sum = 0.0
@@ -44,7 +45,9 @@ def train_one_epoch(
         y = batch["y"].to(device)
         optimizer.zero_grad(set_to_none=True)
         logits = model(x)
-        loss = bce_dice_loss(logits, y, bce_weight=bce_weight)
+        loss = bce_dice_boundary_loss(
+            logits, y, bce_weight=bce_weight, boundary_weight=boundary_weight
+        )
         loss.backward()
         optimizer.step()
         with torch.no_grad():
@@ -63,6 +66,7 @@ def validate_detailed(
     loader: DataLoader,
     device: torch.device,
     bce_weight: float = 0.5,
+    boundary_weight: float = 0.0,
 ) -> Dict[str, Any]:
     model.eval()
     loss_sum = 0.0
@@ -76,7 +80,9 @@ def validate_detailed(
         y = batch["y"].to(device)
         case_ids: List[str] = batch["case_id"]
         logits = model(x)
-        loss = bce_dice_loss(logits, y, bce_weight=bce_weight)
+        loss = bce_dice_boundary_loss(
+            logits, y, bce_weight=bce_weight, boundary_weight=boundary_weight
+        )
         prob = torch.sigmoid(logits)
         d = dice_coefficient(prob, y).mean().item()
         bs = x.size(0)
@@ -113,6 +119,7 @@ def run_training(
     lr: float = 1e-3,
     device: Optional[torch.device] = None,
     bce_weight: float = 0.5,
+    boundary_weight: float = 0.0,
     training_args: Optional[Dict[str, Any]] = None,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -138,10 +145,7 @@ def run_training(
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
     log(
-        "#######################################################################\n"
-        "Uncertainty-guided stage — binary tumor refinement (5 ch: 3 HU windows + prob + entropy). "
-        "Input matches infer_uncertainty.\n"
-        "#######################################################################",
+        f"UncertaintyUNet2d — 5 ch (3 HU + prob + entropy); loss BCE+Dice + boundary_weight={boundary_weight}; aligned with infer_uncertainty.",
         also_print=True,
     )
     if training_args:
@@ -156,8 +160,10 @@ def run_training(
         log(f"Epoch {epoch}")
         log(f"Current learning rate: {optimizer.param_groups[0]['lr']:.6f}", also_print=False)
 
-        tr = train_one_epoch(model, train_loader, optimizer, device, bce_weight)
-        va = validate_detailed(model, val_loader, device, bce_weight)
+        tr = train_one_epoch(
+            model, train_loader, optimizer, device, bce_weight, boundary_weight
+        )
+        va = validate_detailed(model, val_loader, device, bce_weight, boundary_weight)
         elapsed = time.perf_counter() - t0
 
         gc = va["global_confusion"]
@@ -194,7 +200,7 @@ def run_training(
                 "mean": {LABEL_TUMOR: {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}},
                 "metric_per_case": per_case_list,
                 "best_epoch": epoch,
-                "note": "Metrics on resized ROI tensors (5 ch). See meta.json hu_windows, crop_size.",
+                "note": "Val metrics on 5-channel ROI crops; training hyperparameters in meta.json / training_args.json.",
             }
             (val_dir / "summary.json").write_text(
                 json.dumps(best_summary, indent=2),

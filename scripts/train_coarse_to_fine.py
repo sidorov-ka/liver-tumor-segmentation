@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Train coarse_to_fine (stage-2) U-Net on exported .npz slices.
+"""Train coarse_to_fine (stage-2) on ``export.py`` .npz: CT + nnU-Net tumor prob, ROI = GT∪coarse + resize.
 
-Default training matches scripts/infer_coarse_to_fine.py: nnU-Net tumor **probability** as 2nd channel and
-2D ROI crop (GT ∪ coarse) + resize — see Li et al., Universal Topology Refinement (arXiv:2409.09796)
-for probability-map refinement (we do not implement polynomial synthesis from that paper).
+Aligned with ``infer_coarse_to_fine``. Refinement in the spirit of Li et al., *Universal Topology
+Refinement* (UTR), arXiv:2409.09796 — probability-map topology refinement (polynomial synthesis from
+that paper is not implemented).
 
-Writes under coarse_to_fine_results/ only (not multiview_results; not nnU-Net): training_log_*.txt, validation/summary.json, checkpoints.
+Writes under ``results_coarse_to_fine/``: checkpoints, ``training_log_*.txt``, ``validation/summary.json``.
 """
 
 from __future__ import annotations
