@@ -5,6 +5,11 @@ Four input channels: three fixed HU windows + nnU-Net tumor **probability**, per
 like ``infer_multiview`` / ``multiview.pipeline``. Writes under ``multiview_results/`` only.
 
 Use the resulting ``checkpoint_best.pth`` + ``meta.json`` with ``scripts/infer_multiview.py --multiview-dir ...``.
+
+Suspicious ROI + post-refine settings default from ``MultiviewConfig`` (single source with infer):
+primary band ``prob_lo``/``prob_hi``, optional high band ``0.78``–``0.95``, blend with
+``refine_alpha=0.5``, size split at 8000 voxels, ``alpha_blend_small``/``large`` 0.8/0.35,
+``post_remove_tumor_components_below_voxels=32``. Override via CLI flags if needed.
 """
 
 from __future__ import annotations

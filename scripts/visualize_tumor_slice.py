@@ -4,7 +4,8 @@ Axial CT slice with GT vs prediction tumor contours (PNG in repo).
 
 Example:
   python scripts/visualize_tumor_slice.py --case case_0022
-  python scripts/visualize_tumor_slice.py --case case_0000 --pred-dir inference_comparison/multiview
+  python scripts/visualize_tumor_slice.py --case case_0000 --pred-dir inference_comparison/multiview_infer_run_2026_04_03
+  # Output: one PNG, short name: visualizations/case_0000_z123_multiview.png
 """
 
 from __future__ import annotations
@@ -12,11 +13,28 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _short_pred_label(pred_dir: Path, override: Optional[str]) -> str:
+    """Stable short tag for filenames (baseline / coarse_to_fine / multiview / folder name)."""
+    if override is not None and str(override).strip():
+        return str(override).strip().replace(" ", "_")
+    name = pred_dir.name
+    lower = name.lower()
+    if lower == "baseline":
+        return "baseline"
+    if lower == "coarse_to_fine":
+        return "coarse_to_fine"
+    if "multiview" in lower:
+        return "multiview"
+    if len(name) > 40:
+        return name[:37] + "..."
+    return name
 
 
 def _load_nifti(path: Path) -> Tuple[np.ndarray, Any]:
@@ -78,6 +96,12 @@ def _parse_args() -> argparse.Namespace:
         default=[-100.0, 400.0],
         metavar=("LO", "HI"),
         help="HU window for CT display.",
+    )
+    p.add_argument(
+        "--label",
+        type=str,
+        default=None,
+        help="Short tag in output filename (default: baseline / coarse_to_fine / multiview from --pred-dir).",
     )
     return p.parse_args()
 
@@ -150,12 +174,12 @@ def main() -> None:
     ax.imshow(sl_vis.T, cmap="gray", origin="lower", aspect="auto")
     ax.contour(sl_gt.T, levels=[0.5], colors="lime", linewidths=2.0, origin="lower")
     ax.contour(sl_pr.T, levels=[0.5], colors="red", linewidths=2.0, origin="lower", linestyles="--")
-    stem = Path(args.pred_dir).name
-    ax.set_title(f"{case_id}  z={z}  green=GT tumor  red={stem} (pred)")
+    label = _short_pred_label(pred_dir, args.label)
+    ax.set_title(f"{case_id}  z={z}  green=GT tumor  red={label} (pred)")
     ax.axis("off")
     plt.tight_layout()
 
-    out_png = out_dir / f"{case_id}_slice_z{z}_{stem}_vs_gt.png"
+    out_png = out_dir / f"{case_id}_z{z}_{label}.png"
     fig.savefig(out_png, dpi=150)
     plt.close(fig)
     print(f"Wrote {out_png}")

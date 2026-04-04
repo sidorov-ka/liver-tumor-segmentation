@@ -20,12 +20,12 @@ class MultiviewConfig:
     """Suspicious voxels, connected components, ROI padding, multi-window CT, MultiviewUNet2d (4 ch)."""
 
     # Primary ambiguous band: prob_lo <= p <= prob_hi (inclusive).
-    prob_lo: float = 0.25
-    prob_hi: float = 0.75
+    prob_lo: float = 0.30
+    prob_hi: float = 0.70
 
     # Optional second band (e.g. high-confidence boundary): union with primary when both set.
-    prob_high_band_lo: Optional[float] = None
-    prob_high_band_hi: Optional[float] = None
+    prob_high_band_lo: Optional[float] = 0.78
+    prob_high_band_hi: Optional[float] = 0.95
 
     # Skip tiny 3D suspicious blobs before refinement (reduces speckle; raise if large leaks persist).
     min_component_voxels: int = 64
@@ -39,18 +39,18 @@ class MultiviewConfig:
     # 2D crop to network (H, W)
     crop_size: Tuple[int, int] = (256, 256)
 
-    # "replace": refined prob overwrites nnU-Net tumor prob in ROI (default, backward compatible).
-    # "blend": p_out = alpha*p_refine + (1-alpha)*p_nnunet in ROI.
-    refine_blend_mode: str = "replace"
+    # "replace": refined prob overwrites nnU-Net tumor prob in ROI.
+    # "blend": p_out = alpha*p_refine + (1-alpha)*p_nnunet in ROI (default: aligned with infer_multiview).
+    refine_blend_mode: str = "blend"
     # When blend and component_size_alpha_threshold_voxels == 0, use this alpha for all components.
-    refine_alpha: float = 1.0
+    refine_alpha: float = 0.5
     # If > 0: suspicious components with nv < threshold use alpha_blend_small, else alpha_blend_large.
-    component_size_alpha_threshold_voxels: int = 0
-    alpha_blend_small: float = 0.75
+    component_size_alpha_threshold_voxels: int = 8000
+    alpha_blend_small: float = 0.8
     alpha_blend_large: float = 0.35
 
     # After refinement: remove tumor CCs at p>0.5 with volume below this (0 = off).
-    post_remove_tumor_components_below_voxels: int = 0
+    post_remove_tumor_components_below_voxels: int = 32
 
 
 def multiview_config_to_json_dict(cfg: MultiviewConfig) -> Dict[str, Any]:
