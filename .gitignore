@@ -43,6 +43,8 @@ results_multiview/*
 !results_multiview/.gitkeep
 results_uncertainty/*
 !results_uncertainty/.gitkeep
+results_boundary_aware_coarse_to_fine/*
+!results_boundary_aware_coarse_to_fine/.gitkeep
 # legacy folder names (local only)
 multiview_results/
 uncertainty_results/
