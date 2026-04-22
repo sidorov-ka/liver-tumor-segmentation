@@ -1,4 +1,4 @@
-"""Train / validate boundary-aware coarse-to-fine TinyUNet (3 ch)."""
+"""Train / validate boundary-aware coarse-to-fine TinyUNet (5 ch: 3 HU windows + prob + entropy)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from boundary_aware_coarse_to_fine.model import BoundaryAwareTinyUNet2d
 from boundary_aware_coarse_to_fine.utils import (
     bce_dice_with_optional_ring,
     dice_coefficient,
+    load_checkpoint,
     save_checkpoint,
 )
 
@@ -43,6 +44,7 @@ def train_one_epoch(
     device: torch.device,
     bce_weight: float = 0.5,
     lambda_boundary: float = 0.0,
+    focal_gamma: float = 0.0,
 ) -> Dict[str, float]:
     model.train()
     loss_sum = 0.0
@@ -55,7 +57,12 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
         logits = model(x)
         loss = bce_dice_with_optional_ring(
-            logits, y, ring, bce_weight=bce_weight, lambda_boundary=lambda_boundary
+            logits,
+            y,
+            ring,
+            bce_weight=bce_weight,
+            lambda_boundary=lambda_boundary,
+            focal_gamma=focal_gamma,
         )
         loss.backward()
         optimizer.step()
@@ -76,6 +83,7 @@ def validate_detailed(
     device: torch.device,
     bce_weight: float = 0.5,
     lambda_boundary: float = 0.0,
+    focal_gamma: float = 0.0,
 ) -> Dict[str, Any]:
     model.eval()
     loss_sum = 0.0
@@ -91,7 +99,12 @@ def validate_detailed(
         case_ids: List[str] = batch["case_id"]
         logits = model(x)
         loss = bce_dice_with_optional_ring(
-            logits, y, ring, bce_weight=bce_weight, lambda_boundary=lambda_boundary
+            logits,
+            y,
+            ring,
+            bce_weight=bce_weight,
+            lambda_boundary=lambda_boundary,
+            focal_gamma=focal_gamma,
         )
         prob = torch.sigmoid(logits)
         d = dice_coefficient(prob, y).mean().item()
@@ -124,14 +137,16 @@ def run_training(
     train_loader: DataLoader,
     val_loader: DataLoader,
     out_dir: Path,
-    in_channels: int = 3,
+    in_channels: int = 5,
     epochs: int = 30,
     lr: float = 1e-3,
     device: Optional[torch.device] = None,
     bce_weight: float = 0.5,
     lambda_boundary: float = 0.0,
+    focal_gamma: float = 0.0,
     training_args: Optional[Dict[str, Any]] = None,
     tensorboard_dir: Optional[Path] = None,
+    resume_path: Optional[Path] = None,
 ) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     val_dir = out_dir / "validation"
@@ -142,10 +157,24 @@ def run_training(
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     best_dice = -1.0
+    start_epoch = 0
     best_path = out_dir / "checkpoint_best.pth"
+    last_path = out_dir / "checkpoint_last.pth"
 
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    log_path = out_dir / f"training_log_{ts}.txt"
+    log_path = (
+        out_dir / f"training_log_resume_{ts}.txt"
+        if resume_path is not None
+        else out_dir / f"training_log_{ts}.txt"
+    )
+
+    if resume_path is not None:
+        rp = Path(resume_path)
+        if not rp.is_file():
+            raise FileNotFoundError(f"Resume checkpoint not found: {rp}")
+        ckpt = load_checkpoint(rp, model, optimizer, map_location=device)
+        start_epoch = int(ckpt.get("epoch", -1)) + 1
+        best_dice = float(ckpt.get("best_metric", -1.0))
     log_lines: List[str] = []
 
     def log(msg: str, also_print: bool = True) -> None:
@@ -156,10 +185,16 @@ def run_training(
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
     log(
-        "Boundary-aware coarse-to-fine stage 2 — binary tumor (3 ch: CT + nnU-Net prob + entropy); "
-        "optional ring-weighted loss; inference uses ring-only merge.",
+        "Boundary-aware coarse-to-fine stage 2 — binary tumor (5 ch: 3 HU windows + nnU-Net prob + entropy); "
+        "optional focal BCE + ring-weighted loss; inference uses ring-only merge.",
         also_print=True,
     )
+    if resume_path is not None:
+        log(
+            f"Resumed from {resume_path} — next epoch index {start_epoch}, "
+            f"best aggregated Dice so far {best_dice:.6f}",
+            also_print=True,
+        )
     if training_args:
         args_path = out_dir / "training_args.json"
         args_path.write_text(json.dumps(training_args, indent=2), encoding="utf-8")
@@ -186,16 +221,23 @@ def run_training(
     best_summary: Optional[Dict[str, Any]] = None
 
     try:
-        for epoch in range(epochs):
+        end_epoch = start_epoch + epochs
+        for epoch in range(start_epoch, end_epoch):
             t0 = time.perf_counter()
             log(f"Epoch {epoch}")
             log(f"Current learning rate: {optimizer.param_groups[0]['lr']:.6f}", also_print=False)
 
             tr = train_one_epoch(
-                model, train_loader, optimizer, device, bce_weight, lambda_boundary
+                model,
+                train_loader,
+                optimizer,
+                device,
+                bce_weight,
+                lambda_boundary,
+                focal_gamma,
             )
             va = validate_detailed(
-                model, val_loader, device, bce_weight, lambda_boundary
+                model, val_loader, device, bce_weight, lambda_boundary, focal_gamma
             )
             elapsed = time.perf_counter() - t0
 
@@ -245,6 +287,7 @@ def run_training(
                         "val_dice_aggregated": best_dice,
                         "val_dice_batch_mean": va["dice"],
                         "lambda_boundary": lambda_boundary,
+                        "focal_gamma": focal_gamma,
                     },
                 )
                 per_case_list = merge_per_case_metrics(va["per_case_confusion"], LABEL_TUMOR)
@@ -275,6 +318,21 @@ def run_training(
             if tb_writer is not None:
                 tb_writer.add_scalar("val/best_dice_aggregated_so_far", best_dice, epoch)
             log("", also_print=False)
+
+            save_checkpoint(
+                last_path,
+                model,
+                optimizer,
+                epoch,
+                best_dice,
+                meta={
+                    "val_dice_aggregated": float(gm["Dice"]),
+                    "val_dice_batch_mean": va["dice"],
+                    "lambda_boundary": lambda_boundary,
+                    "focal_gamma": focal_gamma,
+                    "last_epoch": epoch,
+                },
+            )
 
     finally:
         if tb_writer is not None:

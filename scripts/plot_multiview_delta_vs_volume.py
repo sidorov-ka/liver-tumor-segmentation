@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-Scatter: GT tumor volume (mm³) vs ΔDice (multiview − baseline), plus printed statistics.
+Scatter: GT tumor volume (mm³) vs ΔDice (model − baseline), plus printed statistics.
 
   python scripts/plot_multiview_delta_vs_volume.py
   python scripts/plot_multiview_delta_vs_volume.py --output-json visualizations/multiview_delta_stats.json
+
+  Boundary-aware vs baseline:
+  python scripts/plot_multiview_delta_vs_volume.py \\
+    --model-metrics inference_comparison/boundary_aware_coarse_to_fine/val_metrics_fold0.json \\
+    --model-label "Boundary-aware" \\
+    --output-png visualizations/boundary_delta_vs_gt_volume.png \\
+    --output-json visualizations/boundary_delta_stats.json
 """
 
 from __future__ import annotations
@@ -51,9 +58,18 @@ def tumor_vol_mm3(path: Path, tumor_label: int = 2) -> float:
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Plot ΔDice vs GT tumor volume; print stats.")
     p.add_argument(
+        "--model-metrics",
         "--multiview-metrics",
+        dest="model_metrics",
         type=str,
         default="inference_comparison/multiview_infer_run_2026_04_03/metrics.json",
+        help="JSON with metric_per_case (same schema as val_metrics_fold0.json).",
+    )
+    p.add_argument(
+        "--model-label",
+        type=str,
+        default="Multiview",
+        help="Name for plot title and y-axis (e.g. Multiview, Boundary-aware).",
     )
     p.add_argument(
         "--baseline-metrics",
@@ -81,15 +97,16 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    mv_path = (REPO_ROOT / args.multiview_metrics).resolve()
+    model_path = (REPO_ROOT / args.model_metrics).resolve()
     bl_path = (REPO_ROOT / args.baseline_metrics).resolve()
     gt_dir = (REPO_ROOT / args.gt_dir).resolve()
+    model_label = (args.model_label or "Model").strip()
 
-    mv = json.loads(mv_path.read_text(encoding="utf-8"))
+    m_data = json.loads(model_path.read_text(encoding="utf-8"))
     bl = json.loads(bl_path.read_text(encoding="utf-8"))
-    mv_d = {x["case_id"]: x["metrics"]["2"]["Dice"] for x in mv["metric_per_case"]}
+    m_d = {x["case_id"]: x["metrics"]["2"]["Dice"] for x in m_data["metric_per_case"]}
     bl_d = {x["case_id"]: x["metrics"]["2"]["Dice"] for x in bl["metric_per_case"]}
-    common = sorted(set(mv_d) & set(bl_d))
+    common = sorted(set(m_d) & set(bl_d))
 
     rows: List[Dict[str, Any]] = []
     for cid in common:
@@ -98,14 +115,14 @@ def main() -> None:
             continue
         vol = tumor_vol_mm3(p)
         d_bl = float(bl_d[cid])
-        d_mv = float(mv_d[cid])
+        d_m = float(m_d[cid])
         rows.append(
             {
                 "case_id": cid,
                 "gt_tumor_vol_mm3": vol,
                 "dice_baseline": d_bl,
-                "dice_multiview": d_mv,
-                "delta_dice": d_mv - d_bl,
+                "dice_model": d_m,
+                "delta_dice": d_m - d_bl,
             }
         )
 
@@ -166,7 +183,8 @@ def main() -> None:
 
     stats: Dict[str, Any] = {
         "n_cases": len(rows),
-        "multiview_metrics": str(mv_path),
+        "model_label": model_label,
+        "model_metrics": str(model_path),
         "baseline_metrics": str(bl_path),
         "gt_dir": str(gt_dir),
         "delta_dice": {
@@ -190,10 +208,10 @@ def main() -> None:
 
     # --- print ---
     print("=" * 72)
-    print("Multiview vs baseline — ΔDice vs GT tumor volume")
+    print(f"{model_label} vs baseline — ΔDice vs GT tumor volume")
     print("=" * 72)
-    print(f"Cases: {stats['n_cases']}  (intersection multiview + baseline + GT file)")
-    print(f"ΔDice (multiview − baseline): mean={stats['delta_dice']['mean']:+.4f}  "
+    print(f"Cases: {stats['n_cases']}  (intersection model + baseline + GT file)")
+    print(f"ΔDice ({model_label} − baseline): mean={stats['delta_dice']['mean']:+.4f}  "
           f"median={stats['delta_dice']['median']:+.4f}  "
           f"std={stats['delta_dice']['std']:.4f}  "
           f"min={stats['delta_dice']['min']:+.4f}  max={stats['delta_dice']['max']:+.4f}")
@@ -251,8 +269,8 @@ def main() -> None:
     ax.axhline(0.0, color="gray", linestyle="--", linewidth=1)
     ax.set_xscale("log")
     ax.set_xlabel("GT tumor volume (mm³), log scale")
-    ax.set_ylabel("ΔDice = multiview − baseline")
-    ax.set_title("Multiview vs baseline by tumor size (n=%d)" % len(rows))
+    ax.set_ylabel(f"ΔDice = {model_label} − baseline")
+    ax.set_title(f"{model_label} vs baseline by tumor size (n=%d)" % len(rows))
     ax.grid(True, alpha=0.3)
     fig.text(
         0.99,

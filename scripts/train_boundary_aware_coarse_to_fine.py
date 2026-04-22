@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train boundary_aware_coarse_to_fine (stage-2) on export.py .npz: CT + coarse prob + entropy; ROI as coarse_to_fine.
+"""Train boundary_aware_coarse_to_fine (stage-2) on export.py .npz: 3 HU windows + coarse prob + entropy; ROI as coarse_to_fine.
 
 Writes under ``results_boundary_aware_coarse_to_fine/``: checkpoints, ``training_log_*.txt``,
 ``validation/summary.json``, and by default TensorBoard scalars under ``<out_dir>/tensorboard``.
@@ -19,6 +19,11 @@ from torch.utils.data import DataLoader
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from boundary_aware_coarse_to_fine.config import (  # noqa: E402
+    DEFAULT_HU_WINDOWS,
+    hu_windows_to_json_list,
+    parse_hu_windows_arg,
+)
 from boundary_aware_coarse_to_fine.dataset import build_datasets  # noqa: E402
 from boundary_aware_coarse_to_fine.paths import (  # noqa: E402
     BOUNDARY_AWARE_COARSE_TO_FINE_TASK_DIR,
@@ -32,7 +37,7 @@ from boundary_aware_coarse_to_fine.trainer import (  # noqa: E402
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Train boundary_aware_coarse_to_fine (3-channel) on ROI-exported slices."
+        description="Train boundary_aware_coarse_to_fine (5-channel: 3 HU windows + coarse prob + entropy) on ROI-exported slices."
     )
     p.add_argument(
         "--export-dir",
@@ -113,6 +118,20 @@ def _parse_args() -> argparse.Namespace:
         default=0.5,
         help="Threshold on coarse probability to build binary mask for ring (train).",
     )
+    p.add_argument(
+        "--hu-windows",
+        type=float,
+        nargs=6,
+        metavar=("W1", "L1", "W2", "L2", "W3", "L3"),
+        default=None,
+        help="Three HU (width, level) pairs, six floats. Default: multiview-aligned triple from config.",
+    )
+    p.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=0.0,
+        help="Focal BCE gamma (0 = standard BCE term).",
+    )
     p.add_argument("--max-train", type=int, default=None, help="Optional cap on training files (debug).")
     p.add_argument(
         "--no-tensorboard",
@@ -125,32 +144,69 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="TensorBoard log directory (default: <out_dir>/tensorboard).",
     )
+    p.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Path to checkpoint_last.pth or checkpoint_best.pth, or run directory (prefers last). "
+        "Loads weights + optimizer; trains for --epochs more steps. If --out-dir omitted, uses parent of checkpoint.",
+    )
     return p.parse_args()
+
+
+def _resolve_resume_checkpoint(path: Path) -> Path:
+    if path.is_file():
+        return path
+    if path.is_dir():
+        last = path / "checkpoint_last.pth"
+        if last.is_file():
+            return last
+        best = path / "checkpoint_best.pth"
+        if best.is_file():
+            return best
+    raise FileNotFoundError(
+        f"Resume path not found: {path} (expected .pth file or run dir with checkpoint_last/best)"
+    )
 
 
 def main() -> None:
     args = _parse_args()
     export_dir = Path(args.export_dir)
+
+    resume_ckpt: Path | None = None
+    if args.resume:
+        resume_ckpt = _resolve_resume_checkpoint(Path(args.resume).resolve())
+
     if args.out_dir is None:
-        stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        out_dir = (
-            REPO_ROOT
-            / DEFAULT_BOUNDARY_AWARE_COARSE_TO_FINE_RESULTS_ROOT
-            / args.dataset_folder
-            / f"fold_{args.fold}"
-            / BOUNDARY_AWARE_COARSE_TO_FINE_TASK_DIR
-            / f"run_{stamp}"
-        )
-        out_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Using default --out-dir {out_dir}")
+        if resume_ckpt is not None:
+            out_dir = resume_ckpt.parent
+            print(f"Using --out-dir {out_dir} (same run as --resume)")
+        else:
+            stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+            out_dir = (
+                REPO_ROOT
+                / DEFAULT_BOUNDARY_AWARE_COARSE_TO_FINE_RESULTS_ROOT
+                / args.dataset_folder
+                / f"fold_{args.fold}"
+                / BOUNDARY_AWARE_COARSE_TO_FINE_TASK_DIR
+                / f"run_{stamp}"
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Using default --out-dir {out_dir}")
     else:
         out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     crop_size = (int(args.crop_size[0]), int(args.crop_size[1]))
     roi_aligned = not bool(args.no_roi_align)
     roi_pad_xy = (int(args.roi_pad[0]), int(args.roi_pad[1]))
     min_roi_xy = (int(args.min_roi[0]), int(args.min_roi[1]))
 
-    in_channels = 3
+    hu_windows = (
+        parse_hu_windows_arg(list(args.hu_windows))
+        if args.hu_windows is not None
+        else DEFAULT_HU_WINDOWS
+    )
+    in_channels = 5
     train_ds, val_ds = build_datasets(
         export_dir,
         crop_size=crop_size,
@@ -162,6 +218,7 @@ def main() -> None:
         boundary_dilate_iters=args.boundary_dilate_iters,
         boundary_erode_iters=args.boundary_erode_iters,
         coarse_bin_threshold=args.coarse_bin_threshold,
+        hu_windows=hu_windows,
     )
     if len(train_ds) == 0:
         raise ValueError("train/ has no .npz files — run scripts/export.py first.")
@@ -206,10 +263,16 @@ def main() -> None:
         "boundary_dilate_iters": args.boundary_dilate_iters,
         "boundary_erode_iters": args.boundary_erode_iters,
         "coarse_bin_threshold": args.coarse_bin_threshold,
+        "hu_windows": hu_windows_to_json_list(hu_windows),
+        "focal_gamma": args.focal_gamma,
+        "in_channels": in_channels,
         "max_train": args.max_train,
         "tensorboard": not args.no_tensorboard,
         "tensorboard_dir": args.tensorboard_dir,
     }
+    if resume_ckpt is not None:
+        training_args["resume_from"] = str(resume_ckpt.resolve())
+        training_args["epochs_additional"] = args.epochs
 
     tensorboard_dir = None
     if not args.no_tensorboard:
@@ -230,22 +293,35 @@ def main() -> None:
         device=device,
         bce_weight=args.bce_weight,
         lambda_boundary=args.lambda_boundary,
+        focal_gamma=args.focal_gamma,
         training_args=training_args,
         tensorboard_dir=tensorboard_dir,
+        resume_path=resume_ckpt,
     )
 
     meta = {
         "in_channels": in_channels,
+        "hu_windows": hu_windows_to_json_list(hu_windows),
+        "focal_gamma": args.focal_gamma,
         "adaptive_inference": {
             "enabled": True,
             "small_voxel_threshold": 6000,
             "large_voxel_threshold": 280000,
             "mean_prob_suspicious": 0.22,
+            "refine_tau_default": 0.52,
             "refine_tau_small": 0.45,
             "refine_tau_large": 0.56,
             "refine_tau_suspicious": 0.62,
             "ring_blend_large": 0.42,
             "ring_blend_suspicious": 0.28,
+        },
+        "fp_component_removal": {
+            "enabled": True,
+            "hu_filter_enabled": True,
+            "hu_narrow_mean_min": 0.1,
+            "hu_narrow_mean_max": 0.9,
+            "mean_prob_below": None,
+            "max_voxels_small_cc": None,
         },
         "dataset_folder": args.dataset_folder,
         "fold": args.fold,

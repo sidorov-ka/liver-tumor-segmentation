@@ -1,6 +1,6 @@
 # Liver tumor segmentation (nnU-Net v2)
 
-Мультиклассовая сегментация печени и опухоли на КТ с [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet) на датасете в формате nnU-Net (`Dataset001_LiverTumor`). **coarse_to_fine** — отдельный 2D U-Net по грубой маске nnU-Net. **multiview** — **независимая** надстройка: своя сеть `MultiviewUNet2d` (три фиксированных HU-окна + канал вероятности опухоли), в духе multi-view fusion для узлов на КТ (см. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* и аналоги); чекпоинт обучается отдельно, не из весов coarse_to_fine. Код: `src/multiview`, обучение `scripts/train_multiview.py`, инференс `scripts/infer_multiview.py`. **uncertainty** — ещё одна независимая вторая стадия: `UncertaintyUNet2d` (три HU-окна + вероятность + энтропия Bernoulli), `src/uncertainty`, `scripts/train_uncertainty.py`, `scripts/infer_uncertainty.py`.
+Мультиклассовая сегментация печени и опухоли на КТ с [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet) на датасете в формате nnU-Net (`Dataset001_LiverTumor`). **coarse_to_fine** — отдельный 2D U-Net по грубой маске nnU-Net. **multiview** — **независимая** надстройка: своя сеть `MultiviewUNet2d` (три фиксированных HU-окна + канал вероятности опухоли), в духе multi-view fusion для узлов на КТ (см. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* и аналоги); чекпоинт обучается отдельно, не из весов coarse_to_fine. Код: `src/multiview`, обучение `scripts/train_multiview.py`, инференс `scripts/infer_multiview.py`. **uncertainty** — ещё одна независимая вторая стадия: `UncertaintyUNet2d` (три HU-окна + вероятность + энтропия Bernoulli), `src/uncertainty`, `scripts/train_uncertainty.py`, `scripts/infer_uncertainty.py`. **boundary_aware_coarse_to_fine** — отдельная вторая стадия: компактный 2D U-Net `BoundaryAwareTinyUNet2d` (по умолчанию **пять** входов: три HU-окна + вероятность опухоли stage-1 + нормированная энтропия; старые раны могли быть с тремя каналами — см. `meta.json`); на инференсе уточнение применяется **только в морфологическом кольце** вокруг грубой маски опухоли, с опционально адаптивной шириной кольца и порогом (`src/boundary_aware_coarse_to_fine`, `scripts/train_boundary_aware_coarse_to_fine.py`, `scripts/infer_boundary_aware_coarse_to_fine.py`).
 
 ## Требования
 
@@ -40,17 +40,19 @@ nnUNet_raw/Dataset001_LiverTumor/
 ## Пайплайн (кратко)
 
 1. **nnU-Net** — планирование, препроцесс, обучение fold 0 (`scripts/train.sh`).
-2. **Export** — слайсы с предсказанием stage-1 и GT для вторых стадий (`scripts/export.py`; общий экспорт для coarse_to_fine, multiview и uncertainty).
+2. **Export** — слайсы с предсказанием stage-1 и GT для вторых стадий (`scripts/export.py`; общий экспорт для coarse_to_fine, multiview, uncertainty и boundary_aware_coarse_to_fine).
 3. **coarse_to_fine** — вторая стадия (`scripts/train_coarse_to_fine.sh` или `train_coarse_to_fine.py` → `results_coarse_to_fine/...`).
 4. **multiview** — вторая стадия (`scripts/train_multiview.sh` или `train_multiview.py` → `results_multiview/.../multiview/run_*`).
 5. **uncertainty** — вторая стадия (`scripts/train_uncertainty.sh` или `train_uncertainty.py` → `results_uncertainty/.../uncertainty/run_*`).
-6. **Инференс coarse_to_fine** — полный объём: только nnU-Net или nnU-Net + coarse_to_fine (`scripts/infer_coarse_to_fine.py`).
-7. **Инференс multiview** (опционально) — ROI + multi-window (`scripts/infer_multiview.py --multiview-dir ...`; e.g. `inference_comparison/multiview/`).
-8. **Инференс uncertainty** (опционально) — `scripts/infer_uncertainty.py --uncertainty-dir ...` (по умолчанию `-o inference_comparison/uncertainty`). Не смешивать каталоги чекпоинтов разных стадий.
+6. **boundary_aware_coarse_to_fine** — вторая стадия (`scripts/train_boundary_aware_coarse_to_fine.sh` → `results_boundary_aware_coarse_to_fine/.../boundary_aware_coarse_to_fine/run_*`).
+7. **Инференс coarse_to_fine** — полный объём: только nnU-Net или nnU-Net + coarse_to_fine (`scripts/infer_coarse_to_fine.py`).
+8. **Инференс multiview** (опционально) — ROI + multi-window (`scripts/infer_multiview.py --multiview-dir ...`; e.g. `inference_comparison/multiview/`).
+9. **Инференс uncertainty** (опционально) — `scripts/infer_uncertainty.py --uncertainty-dir ...` (по умолчанию `-o inference_comparison/uncertainty`).
+10. **Инференс boundary_aware_coarse_to_fine** (опционально) — `scripts/infer_boundary_aware_coarse_to_fine.py --boundary-aware-dir ...` (по умолчанию вывод под `inference_comparison/boundary_aware_coarse_to_fine/`). Не смешивать каталоги чекпоинтов разных стадий.
 
-**Согласованность stage-1:** по умолчанию и `export.py`, и `infer_coarse_to_fine.py` / `infer_multiview.py` / `infer_uncertainty.py` используют **tile step 0.75** (как общий «лёгкий» бейзлайн). Для одного и того же шага явно задайте одинаковый `--tile-step-size` в нужных скриптах.
+**Согласованность stage-1:** по умолчанию и `export.py`, и `infer_coarse_to_fine.py` / `infer_multiview.py` / `infer_uncertainty.py` / `infer_boundary_aware_coarse_to_fine.py` используют **tile step 0.75** (как общий «лёгкий» бейзлайн). Для одного и того же шага явно задайте одинаковый `--tile-step-size` в нужных скриптах.
 
-Эксперименты по полному инференсу обычно складывают в `inference_comparison/` с подпапками **`baseline`** (только nnU-Net), **`coarse_to_fine`**, **`multiview`**, **`uncertainty`**.
+Эксперименты по полному инференсу обычно складывают в `inference_comparison/` с подпапками **`baseline`** (только nnU-Net), **`coarse_to_fine`**, **`multiview`**, **`uncertainty`**, **`boundary_aware_coarse_to_fine`**.
 
 ## 1. Обучение nnU-Net
 
@@ -88,7 +90,7 @@ nnUNetv2_train 1 2d 0 -tr nnUNetTrainer_100epochs --c
 
 ## 2. Export слайсов (coarse_to_fine, multiview, uncertainty)
 
-Экспорт **только из обученной базовой nnU-Net** (ничего из вторых стадий сюда не подмешивается). Те же `.npz` используются для `train_coarse_to_fine`, `train_multiview` и `train_uncertainty`. Уже сделанный экспорт для этой же базовой модели можно не переделывать — переэкспорт нужен, если поменялись nnU-Net, данные или параметры экспорта.
+Экспорт **только из обученной базовой nnU-Net** (ничего из вторых стадий сюда не подмешивается). Те же `.npz` используются для `train_coarse_to_fine`, `train_multiview`, `train_uncertainty` и `train_boundary_aware_coarse_to_fine`. Уже сделанный экспорт для этой же базовой модели можно не переделывать — переэкспорт нужен, если поменялись nnU-Net, данные или параметры экспорта.
 
 После обучения nnU-Net (нужен `fold_0` и `splits_final.json` в препроцессе для train/val):
 
@@ -116,7 +118,7 @@ bash scripts/train_coarse_to_fine.sh
 
 После обучения в каталоге рана будут `checkpoint_best.pth` и `meta.json`; для инференса укажите этот каталог в `infer_coarse_to_fine.py`. По умолчанию раны пишутся в **`results_coarse_to_fine/`**.
 
-Для multiview — **отдельный** каталог ранов: **`results_multiview/`** (не смешивать с `results_coarse_to_fine`). Для uncertainty — **`results_uncertainty/`**. См. разделы 4–5 (обучение и инференс multiview и uncertainty).
+Для multiview — **отдельный** каталог ранов: **`results_multiview/`** (не смешивать с `results_coarse_to_fine`). Для uncertainty — **`results_uncertainty/`**. Для boundary_aware_coarse_to_fine — **`results_boundary_aware_coarse_to_fine/`**. См. разделы 4–5 (обучение и инференс multiview, uncertainty и boundary_aware).
 
 ## 4. Обучение multiview (MultiviewUNet2d)
 
@@ -144,6 +146,17 @@ bash scripts/train_uncertainty.sh
 ```
 
 Дальше: `python3 scripts/infer_uncertainty.py ... --uncertainty-dir <каталог_с_checkpoint_best.pth_и_meta.json>` (по умолчанию `-o inference_comparison/uncertainty`). Справка: `python3 scripts/infer_uncertainty.py -h`.
+
+### 4.2. Обучение boundary_aware_coarse_to_fine (BoundaryAwareTinyUNet2d)
+
+Тот же `--export-dir`, что в разделе 2. Обучение на ROI **GT ∪ coarse** (как coarse_to_fine), resize в `--crop-size`. **Пять входов** (по умолчанию): три HU-окна (`boundary_aware_coarse_to_fine.config`, по смыслу согласованы с multiview/uncertainty) + `coarse_tumor_prob` + нормированная энтропия Bernoulli по этой вероятности. Опции: `--hu-windows` (шесть чисел W/L × 3), `--lambda-boundary` (вес BCE+Dice на **кольце границы** вокруг грубой маски), `--focal-gamma` (фокальный BCE), `--bce-weight`, `--boundary-dilate-iters` / `--boundary-erode-iters`, см. `python3 scripts/train_boundary_aware_coarse_to_fine.py -h`.
+
+```bash
+bash scripts/train_boundary_aware_coarse_to_fine.sh
+# эквивалентно: python3 scripts/train_boundary_aware_coarse_to_fine.py --export-dir refinement_export/fold0
+```
+
+Чекпоинты: `results_boundary_aware_coarse_to_fine/<dataset>/fold_<n>/boundary_aware_coarse_to_fine/run_<timestamp>/` (`checkpoint_best.pth`, после каждой эпохи — `checkpoint_last.pth`, `meta.json` с `hu_windows`, `in_channels`, `focal_gamma`, параметрами кольца и адаптивного инференса). **Доучивание:** `--resume` на каталог рана или на `.pth` (предпочтительно `checkpoint_last.pth`), `--epochs` — сколько **дополнительных** эпох; если `--out-dir` не задан, берётся каталог рана из чекпоинта. Старые раны с `in_channels: 3` в `meta.json` совместимы с инференсом (один нормализованный CT + prob + entropy), но **не** с новой сетью на 5 каналов без переобучения.
 
 ## 5. Инференс на полных объёмах
 
@@ -183,6 +196,18 @@ python3 scripts/infer_uncertainty.py -i <imagesTr_или_аналог> --uncerta
 
 Справка: `python3 scripts/infer_uncertainty.py -h`.
 
+### 5.4. boundary_aware_coarse_to_fine (`infer_boundary_aware_coarse_to_fine.py`)
+
+Тот же стек stage-1, что и у `infer_coarse_to_fine.py`. Две стадии: `--boundary-aware-dir` — каталог рана с `checkpoint_best.pth` и `meta.json` (HU-окна и `in_channels` читаются оттуда). Baseline только nnU-Net: `--stage1-only`. Пример двух стадий:
+
+```bash
+python3 scripts/infer_boundary_aware_coarse_to_fine.py \
+  -i <imagesTr_или_аналог> \
+  --boundary-aware-dir <results_boundary_aware_coarse_to_fine/.../boundary_aware_coarse_to_fine/run_<timestamp>>
+```
+
+Справка: `python3 scripts/infer_boundary_aware_coarse_to_fine.py -h`.
+
 ## 6. Метрики на полных объёмах (Dice / IoU опухоли)
 
 После инференса — отдельно, по сравнению с разметкой (те же имена кейсов, что в `labelsTr`):
@@ -206,6 +231,7 @@ liver-tumor-segmentation/
 ├── src/coarse_to_fine/   # стадия coarse_to_fine: модель, датасет, обучение
 ├── src/multiview/        # MultiviewUNet2d, ROI, окна HU (независимо от coarse_to_fine)
 ├── src/uncertainty/      # UncertaintyUNet2d, энтропия, ROI (независимо от других вторых стадий)
+├── src/boundary_aware_coarse_to_fine/  # BoundaryAwareTinyUNet2d, кольцо границы, адаптивный инференс
 ├── data/
 ├── nnUNet_raw/
 ├── nnUNet_preprocessed/
@@ -214,18 +240,22 @@ liver-tumor-segmentation/
 ├── results_coarse_to_fine/   # только coarse_to_fine (чекпойнты и логи)
 ├── results_multiview/        # только multiview / MultiviewUNet2d (не в git)
 ├── results_uncertainty/      # только uncertainty / UncertaintyUNet2d (не в git)
+├── results_boundary_aware_coarse_to_fine/  # boundary_aware вторая стадия (не в git)
 └── scripts/
     ├── train.sh                  # стадия 1: nnU-Net план / препроцесс / train
     ├── train_coarse_to_fine.sh   # обёртка: PYTHONPATH, EXPORT_DIR → train_coarse_to_fine.py
     ├── train_multiview.sh        # то же для train_multiview.py
     ├── train_uncertainty.sh      # то же для train_uncertainty.py
+    ├── train_boundary_aware_coarse_to_fine.sh  # → train_boundary_aware_coarse_to_fine.py
     ├── export.py                 # слайсы + stage-1 (общий экспорт для вторых стадий)
     ├── train_coarse_to_fine.py   # обучение coarse_to_fine
     ├── train_multiview.py        # обучение MultiviewUNet2d
     ├── train_uncertainty.py      # обучение UncertaintyUNet2d
+    ├── train_boundary_aware_coarse_to_fine.py  # обучение BoundaryAwareTinyUNet2d
     ├── infer_coarse_to_fine.py   # полный объём: stage 1 или 1+coarse_to_fine
     ├── infer_multiview.py        # nnU-Net + MultiviewUNet2d
     ├── infer_uncertainty.py      # nnU-Net + UncertaintyUNet2d
+    ├── infer_boundary_aware_coarse_to_fine.py  # nnU-Net + уточнение в кольце границы
     └── evaluate_segmentations.py # Dice/IoU опухоли vs labelsTr
 ```
 

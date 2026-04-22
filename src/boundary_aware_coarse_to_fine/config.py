@@ -1,55 +1,74 @@
-"""Configuration for boundary_aware coarse-to-fine: adaptive inference-time ring / τ / blend (like ``multiview.config``)."""
+"""HU window triple for multi-channel CT (aligned with multiview / uncertainty).
+
+Three *different* (width, level) pairs so each channel encodes a distinct contrast:
+narrow liver/lesion, typical abdominal soft-tissue, wide field for vessels/context.
+Each channel is ``apply_hu_window`` → [0,1] then per-slice z-score in the dataset (same as uncertainty).
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-from typing import Any, Dict, Literal, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
 
-Regime = Literal["default", "small", "large", "suspicious"]
+# Same fixed triple as multiview.config / uncertainty.config — do not collapse to one window.
+DEFAULT_HU_WINDOWS: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = (
+    (200.0, 50.0),  # narrow: parenchyma / focal lesions
+    (400.0, 40.0),  # soft tissue (typical abdominal)
+    (1500.0, -400.0),  # wide: vessels + global context
+)
+
+
+def parse_hu_windows_arg(flat: list[float]) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
+    """Six floats: W1 L1 W2 L2 W3 L3."""
+    if len(flat) != 6:
+        raise ValueError("Expected six floats for three HU windows: W1 L1 W2 L2 W3 L3")
+    return (
+        (float(flat[0]), float(flat[1])),
+        (float(flat[2]), float(flat[3])),
+        (float(flat[4]), float(flat[5])),
+    )
+
+
+def hu_windows_to_json_list(
+    w: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]],
+) -> list[list[float]]:
+    return [[float(a), float(b)] for a, b in w]
+
+
+def hu_windows_from_json_list(data: object) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
+    if not isinstance(data, list) or len(data) != 3:
+        raise ValueError("hu_windows in meta must be [[W,L], [W,L], [W,L]]")
+    out: list[Tuple[float, float]] = []
+    for pair in data:
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            raise ValueError("Each hu_window entry must be [width, level]")
+        out.append((float(pair[0]), float(pair[1])))
+    return (out[0], out[1], out[2])
+
+
+# --- Adaptive boundary inference (used by infer_boundary_aware_coarse_to_fine.py) ---
 
 
 @dataclass
 class AdaptiveInferenceConfig:
-    """Override via CLI or ``meta.json`` key ``adaptive_inference``."""
-
     enabled: bool = True
-
     small_voxel_threshold: int = 6000
-    large_voxel_threshold: int = 280_000
-
+    large_voxel_threshold: int = 280000
     mean_prob_suspicious: float = 0.22
-
-    skip_refine_mean_prob_below: Optional[float] = None
-    skip_refine_voxels_above: Optional[int] = None
-
-    small_dilate_delta: int = 2
-    small_erode_delta: int = -1
-    large_dilate_delta: int = -1
-    large_erode_delta: int = 1
-    suspicious_dilate_delta: int = -2
-    suspicious_erode_delta: int = 2
-
-    refine_tau_default: float = 0.5
+    refine_tau_default: float = 0.52
     refine_tau_small: float = 0.45
     refine_tau_large: float = 0.56
     refine_tau_suspicious: float = 0.62
-
-    ring_blend_default: float = 1.0
-    ring_blend_small: float = 1.0
     ring_blend_large: float = 0.42
     ring_blend_suspicious: float = 0.28
-
-    dilate_min: int = 1
-    dilate_max: int = 8
-    erode_min: int = 0
-    erode_max: int = 8
+    ring_blend_default: float = 1.0
+    skip_refine_mean_prob_below: Optional[float] = None
+    skip_refine_voxels_above: Optional[int] = None
 
 
-@dataclass
-class AdaptiveInferenceResult:
-    regime: Regime
-    n_tumor_voxels: int
-    mean_prob_in_tumor: Optional[float]
+@dataclass(frozen=True)
+class AdaptiveResolved:
+    regime: str
     dilate_iters: int
     erode_iters: int
     refine_prob_threshold: float
@@ -57,82 +76,68 @@ class AdaptiveInferenceResult:
     skip_refine: bool
 
 
-def _clamp(x: int, lo: int, hi: int) -> int:
-    return max(lo, min(hi, x))
-
-
-def classify_and_resolve(
-    n_tumor_voxels: int,
-    mean_prob_in_tumor: Optional[float],
-    base_dilate: int,
-    base_erode: int,
-    cfg: AdaptiveInferenceConfig,
-) -> AdaptiveInferenceResult:
-    skip = False
-    if cfg.skip_refine_mean_prob_below is not None and mean_prob_in_tumor is not None:
-        if mean_prob_in_tumor < float(cfg.skip_refine_mean_prob_below):
-            skip = True
-    if cfg.skip_refine_voxels_above is not None and n_tumor_voxels > int(cfg.skip_refine_voxels_above):
-        skip = True
-
-    if not cfg.enabled:
-        return AdaptiveInferenceResult(
-            regime="default",
-            n_tumor_voxels=n_tumor_voxels,
-            mean_prob_in_tumor=mean_prob_in_tumor,
-            dilate_iters=base_dilate,
-            erode_iters=base_erode,
-            refine_prob_threshold=cfg.refine_tau_default,
-            ring_blend_alpha=cfg.ring_blend_default,
-            skip_refine=skip,
-        )
-
-    regime: Regime = "default"
-    if mean_prob_in_tumor is not None and mean_prob_in_tumor < cfg.mean_prob_suspicious:
-        regime = "suspicious"
-    elif n_tumor_voxels < cfg.small_voxel_threshold:
-        regime = "small"
-    elif n_tumor_voxels > cfg.large_voxel_threshold:
-        regime = "large"
-
-    if regime == "suspicious":
-        dil = _clamp(base_dilate + cfg.suspicious_dilate_delta, cfg.dilate_min, cfg.dilate_max)
-        ero = _clamp(base_erode + cfg.suspicious_erode_delta, cfg.erode_min, cfg.erode_max)
-        tau = cfg.refine_tau_suspicious
-        blend = cfg.ring_blend_suspicious
-    elif regime == "small":
-        dil = _clamp(base_dilate + cfg.small_dilate_delta, cfg.dilate_min, cfg.dilate_max)
-        ero = _clamp(base_erode + cfg.small_erode_delta, cfg.erode_min, cfg.erode_max)
-        tau = cfg.refine_tau_small
-        blend = cfg.ring_blend_small
-    elif regime == "large":
-        dil = _clamp(base_dilate + cfg.large_dilate_delta, cfg.dilate_min, cfg.dilate_max)
-        ero = _clamp(base_erode + cfg.large_erode_delta, cfg.erode_min, cfg.erode_max)
-        tau = cfg.refine_tau_large
-        blend = cfg.ring_blend_large
-    else:
-        dil = base_dilate
-        ero = base_erode
-        tau = cfg.refine_tau_default
-        blend = cfg.ring_blend_default
-
-    return AdaptiveInferenceResult(
-        regime=regime,
-        n_tumor_voxels=n_tumor_voxels,
-        mean_prob_in_tumor=mean_prob_in_tumor,
-        dilate_iters=dil,
-        erode_iters=ero,
-        refine_prob_threshold=tau,
-        ring_blend_alpha=blend,
-        skip_refine=skip,
+def adaptive_config_from_dict(d: Optional[Dict[str, Any]]) -> AdaptiveInferenceConfig:
+    if not d:
+        return AdaptiveInferenceConfig()
+    return AdaptiveInferenceConfig(
+        enabled=bool(d.get("enabled", True)),
+        small_voxel_threshold=int(d.get("small_voxel_threshold", 6000)),
+        large_voxel_threshold=int(d.get("large_voxel_threshold", 280000)),
+        mean_prob_suspicious=float(d.get("mean_prob_suspicious", 0.22)),
+        refine_tau_default=float(d.get("refine_tau_default", 0.52)),
+        refine_tau_small=float(d.get("refine_tau_small", 0.45)),
+        refine_tau_large=float(d.get("refine_tau_large", 0.56)),
+        refine_tau_suspicious=float(d.get("refine_tau_suspicious", 0.62)),
+        ring_blend_large=float(d.get("ring_blend_large", 0.42)),
+        ring_blend_suspicious=float(d.get("ring_blend_suspicious", 0.28)),
+        ring_blend_default=float(d.get("ring_blend_default", 1.0)),
+        skip_refine_mean_prob_below=(
+            float(d["skip_refine_mean_prob_below"])
+            if d.get("skip_refine_mean_prob_below") is not None
+            else None
+        ),
+        skip_refine_voxels_above=(
+            int(d["skip_refine_voxels_above"])
+            if d.get("skip_refine_voxels_above") is not None
+            else None
+        ),
     )
 
 
-def adaptive_config_from_dict(d: Dict[str, Any]) -> AdaptiveInferenceConfig:
-    if not d:
-        return AdaptiveInferenceConfig()
-    kwargs: Dict[str, Any] = {}
-    for f in fields(AdaptiveInferenceConfig):
-        if f.name in d:
-            kwargs[f.name] = d[f.name]
-    return AdaptiveInferenceConfig(**kwargs)
+def classify_and_resolve(
+    nv: int,
+    mean_p: Optional[float],
+    base_dilate: int,
+    base_erode: int,
+    cfg: AdaptiveInferenceConfig,
+) -> AdaptiveResolved:
+    if cfg.skip_refine_mean_prob_below is not None and mean_p is not None:
+        if mean_p < cfg.skip_refine_mean_prob_below:
+            return AdaptiveResolved(
+                "skip_low_prob", base_dilate, base_erode, cfg.refine_tau_default, cfg.ring_blend_default, True
+            )
+    if cfg.skip_refine_voxels_above is not None and nv > cfg.skip_refine_voxels_above:
+        return AdaptiveResolved(
+            "skip_huge_volume", base_dilate, base_erode, cfg.refine_tau_default, cfg.ring_blend_default, True
+        )
+    if not cfg.enabled:
+        return AdaptiveResolved(
+            "fixed", base_dilate, base_erode, cfg.refine_tau_default, cfg.ring_blend_default, False
+        )
+
+    dil, ero = base_dilate, base_erode
+    if mean_p is not None and mean_p < cfg.mean_prob_suspicious:
+        return AdaptiveResolved(
+            "suspicious", dil + 1, ero, cfg.refine_tau_suspicious, cfg.ring_blend_suspicious, False
+        )
+    if nv < cfg.small_voxel_threshold:
+        return AdaptiveResolved(
+            "small", dil + 1, ero, cfg.refine_tau_small, cfg.ring_blend_default, False
+        )
+    if nv > cfg.large_voxel_threshold:
+        return AdaptiveResolved(
+            "large", dil, ero, cfg.refine_tau_large, cfg.ring_blend_large, False
+        )
+    return AdaptiveResolved(
+        "medium", dil, ero, cfg.refine_tau_default, cfg.ring_blend_default, False
+    )

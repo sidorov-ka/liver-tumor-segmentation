@@ -4,6 +4,7 @@
 #   EXPORT_DIR=/path/to/slices bash scripts/train_boundary_aware_coarse_to_fine.sh
 # Interpreter: PYTHON=python3 (default) or PYTHON=python
 # Extra args are passed through: bash scripts/train_boundary_aware_coarse_to_fine.sh --epochs 50
+# Resume e.g.: .../train_boundary_aware_coarse_to_fine.sh --epochs 20 --resume results_boundary_aware_coarse_to_fine/.../run_<id>
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

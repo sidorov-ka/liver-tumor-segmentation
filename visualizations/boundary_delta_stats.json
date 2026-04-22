@@ -1,0 +1,243 @@
+{
+  "n_cases": 21,
+  "model_label": "Boundary-aware",
+  "model_metrics": "/home/kasid/projects/liver-tumor-segmentation/inference_comparison/boundary_aware_coarse_to_fine/val_metrics_fold0.json",
+  "baseline_metrics": "/home/kasid/projects/liver-tumor-segmentation/inference_comparison/baseline/val_metrics_fold0.json",
+  "gt_dir": "/home/kasid/projects/liver-tumor-segmentation/nnUNet_raw/Dataset001_LiverTumor/labelsTr",
+  "delta_dice": {
+    "mean": 0.0006732196404327518,
+    "median": -0.0015079898282330806,
+    "std": 0.033198235331958065,
+    "min": -0.0650985991208119,
+    "max": 0.09332664752690711
+  },
+  "gt_tumor_vol_mm3": {
+    "min": 540.0,
+    "max": 373122.0,
+    "quartiles": [
+      540.0,
+      2612.0,
+      14131.0,
+      24310.0,
+      373122.0
+    ]
+  },
+  "spearman_rho_volume_vs_delta": 0.10259740259740259,
+  "spearman_p_value": 0.6580970577075416,
+  "quartiles_by_volume": [
+    {
+      "name": "Q1_smallest",
+      "vol_mm3_range": [
+        540.0,
+        2612.0
+      ],
+      "n": 5,
+      "mean_delta_dice": 0.019740765970520806,
+      "median_delta_dice": 0.007837537639002107,
+      "n_better": 3,
+      "n_worse": 2
+    },
+    {
+      "name": "Q2",
+      "vol_mm3_range": [
+        2612.0,
+        14131.0
+      ],
+      "n": 5,
+      "mean_delta_dice": -0.022580216005356812,
+      "median_delta_dice": -0.025886747110842045,
+      "n_better": 1,
+      "n_worse": 4
+    },
+    {
+      "name": "Q3",
+      "vol_mm3_range": [
+        14131.0,
+        24310.0
+      ],
+      "n": 5,
+      "mean_delta_dice": -0.0006629158868097007,
+      "median_delta_dice": -0.0015079898282330806,
+      "n_better": 2,
+      "n_worse": 3
+    },
+    {
+      "name": "Q4_largest",
+      "vol_mm3_range": [
+        24310.0,
+        373122.000001
+      ],
+      "n": 6,
+      "mean_delta_dice": 0.005274907009552725,
+      "median_delta_dice": 0.001548027784296746,
+      "n_better": 4,
+      "n_worse": 2
+    }
+  ],
+  "median_volume_split": {
+    "median_gt_vol_mm3": 14131.0,
+    "smaller_half": {
+      "n": 10,
+      "mean_delta_dice": -0.0014197250174180053,
+      "median_delta_dice": -0.011646500288385132,
+      "n_better": 4,
+      "n_worse": 6
+    },
+    "larger_half": {
+      "n": 11,
+      "mean_delta_dice": 0.0025758966021152585,
+      "median_delta_dice": 0.0013312558857383472,
+      "n_better": 6,
+      "n_worse": 5
+    }
+  },
+  "per_case": [
+    {
+      "case_id": "case_0005",
+      "gt_tumor_vol_mm3": 540.0,
+      "dice_baseline": 0.5412748171368861,
+      "dice_model": 0.5944055944055944,
+      "delta_dice": 0.053130777268708296
+    },
+    {
+      "case_id": "case_0012",
+      "gt_tumor_vol_mm3": 790.0,
+      "dice_baseline": 0.20390070921985815,
+      "dice_model": 0.29722735674676526,
+      "delta_dice": 0.09332664752690711
+    },
+    {
+      "case_id": "case_0015",
+      "gt_tumor_vol_mm3": 875.0,
+      "dice_baseline": 0.10336817653890824,
+      "dice_model": 0.09358511524576507,
+      "delta_dice": -0.009783061293143172
+    },
+    {
+      "case_id": "case_0020",
+      "gt_tumor_vol_mm3": 1669.0,
+      "dice_baseline": 0.15580499246104876,
+      "dice_model": 0.16364253010005086,
+      "delta_dice": 0.007837537639002107
+    },
+    {
+      "case_id": "case_0000",
+      "gt_tumor_vol_mm3": 2591.0,
+      "dice_baseline": 0.6700077101002313,
+      "dice_model": 0.624199638811361,
+      "delta_dice": -0.04580807128887032
+    },
+    {
+      "case_id": "case_0014",
+      "gt_tumor_vol_mm3": 2612.0,
+      "dice_baseline": 0.408124803685478,
+      "dice_model": 0.3430262045646661,
+      "delta_dice": -0.0650985991208119
+    },
+    {
+      "case_id": "case_0003",
+      "gt_tumor_vol_mm3": 2793.0,
+      "dice_baseline": 0.8165033911077618,
+      "dice_model": 0.8029934518241347,
+      "delta_dice": -0.013509939283627093
+    },
+    {
+      "case_id": "case_0001",
+      "gt_tumor_vol_mm3": 7194.0,
+      "dice_baseline": 0.724338282763073,
+      "dice_model": 0.696038712581589,
+      "delta_dice": -0.02829957018148399
+    },
+    {
+      "case_id": "case_0022",
+      "gt_tumor_vol_mm3": 9424.0,
+      "dice_baseline": 0.6976744186046512,
+      "dice_model": 0.7175681942746321,
+      "delta_dice": 0.019893775669980962
+    },
+    {
+      "case_id": "case_0011",
+      "gt_tumor_vol_mm3": 10549.0,
+      "dice_baseline": 0.5465597613276152,
+      "dice_model": 0.5206730142167731,
+      "delta_dice": -0.025886747110842045
+    },
+    {
+      "case_id": "case_0002",
+      "gt_tumor_vol_mm3": 14131.0,
+      "dice_baseline": 0.8175516379886696,
+      "dice_model": 0.8160436481604365,
+      "delta_dice": -0.0015079898282330806
+    },
+    {
+      "case_id": "case_0019",
+      "gt_tumor_vol_mm3": 18528.0,
+      "dice_baseline": 0.599604952546129,
+      "dice_model": 0.6133939248983497,
+      "delta_dice": 0.013788972352220652
+    },
+    {
+      "case_id": "case_0008",
+      "gt_tumor_vol_mm3": 20827.0,
+      "dice_baseline": 0.7742379886344067,
+      "dice_model": 0.759248549521482,
+      "delta_dice": -0.014989439112924718
+    },
+    {
+      "case_id": "case_0009",
+      "gt_tumor_vol_mm3": 22179.0,
+      "dice_baseline": 0.7028674606987261,
+      "dice_model": 0.6900413927440955,
+      "delta_dice": -0.012826067954630593
+    },
+    {
+      "case_id": "case_0013",
+      "gt_tumor_vol_mm3": 23651.0,
+      "dice_baseline": 0.3527234267583289,
+      "dice_model": 0.36494337186784814,
+      "delta_dice": 0.012219945109519237
+    },
+    {
+      "case_id": "case_0010",
+      "gt_tumor_vol_mm3": 24310.0,
+      "dice_baseline": 0.7354340716400328,
+      "dice_model": 0.7278104695353684,
+      "delta_dice": -0.007623602104664395
+    },
+    {
+      "case_id": "case_0006",
+      "gt_tumor_vol_mm3": 31467.0,
+      "dice_baseline": 0.714227760069545,
+      "dice_model": 0.7155590159552834,
+      "delta_dice": 0.0013312558857383472
+    },
+    {
+      "case_id": "case_0007",
+      "gt_tumor_vol_mm3": 32422.0,
+      "dice_baseline": 0.7714510304846595,
+      "dice_model": 0.7653895929480136,
+      "delta_dice": -0.006061437536645897
+    },
+    {
+      "case_id": "case_0021",
+      "gt_tumor_vol_mm3": 36271.0,
+      "dice_baseline": 0.5908134706495692,
+      "dice_model": 0.6006654370547178,
+      "delta_dice": 0.009851966405148516
+    },
+    {
+      "case_id": "case_0017",
+      "gt_tumor_vol_mm3": 37676.0,
+      "dice_baseline": 0.801124123828582,
+      "dice_model": 0.8335105835534666,
+      "delta_dice": 0.03238645972488463
+    },
+    {
+      "case_id": "case_0016",
+      "gt_tumor_vol_mm3": 373122.0,
+      "dice_baseline": 0.8829831154395807,
+      "dice_model": 0.8847479151224359,
+      "delta_dice": 0.0017647996828551449
+    }
+  ]
+}

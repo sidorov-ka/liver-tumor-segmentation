@@ -2,9 +2,13 @@
 """
 Two-stage full-volume inference: nnU-Net (stage 1) + boundary_aware_coarse_to_fine refiner (stage 2).
 
-Same stage-1 stack as ``infer_coarse_to_fine.py`` (``nnUNetPredictor`` + preprocessor). Stage 2 uses
-a 3-channel network (CT + coarse tumor probability + Bernoulli entropy) and applies refined
-predictions **only inside a morphological boundary ring** around the coarse tumor mask; inside the
+Same stage-1 stack as ``infer_coarse_to_fine.py`` (``nnUNetPredictor`` + preprocessor). Optionally **before** stage 2, entire 3D tumor connected components can be removed: **dominant** check is
+mean intensity in the **first HU window** (same as training ch0) on preprocessed CT — if outside
+``[hu_narrow_mean_min, hu_narrow_mean_max]`` in [0,1] window space, the CC is removed regardless of nnU-Net
+softmax. Optional tiny-CC and mean-softmax rules are secondary (``fp_component_removal`` in ``meta.json``).
+
+Stage 2 uses a 5-channel network (three HU windows + coarse tumor probability + Bernoulli entropy) and applies
+refined predictions **only inside a morphological boundary ring** around the coarse tumor mask; inside the
 ROI but outside the ring, stage-1 tumor probability / labels are kept.
 
 **Adaptive inference (default on):** ring width, final τ, and coarse/refined blend in the ring depend on
@@ -21,6 +25,7 @@ import gc
 import json
 import os
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -33,13 +38,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from boundary_aware_coarse_to_fine.config import (  # noqa: E402
+    DEFAULT_HU_WINDOWS,
     adaptive_config_from_dict,
     classify_and_resolve,
+    hu_windows_from_json_list,
 )
+from boundary_aware_coarse_to_fine.dataset import prepare_input_tensor_5ch  # noqa: E402
 from boundary_aware_coarse_to_fine.boundary import boundary_ring_from_binary_mask  # noqa: E402
 from boundary_aware_coarse_to_fine.model import BoundaryAwareTinyUNet2d  # noqa: E402
 from boundary_aware_coarse_to_fine.roi import bbox3d_from_mask, threshold_coarse_tumor  # noqa: E402
-from boundary_aware_coarse_to_fine.utils import bernoulli_entropy_numpy, load_checkpoint  # noqa: E402
+from boundary_aware_coarse_to_fine.utils import (  # noqa: E402
+    FpComponentRemovalConfig,
+    bernoulli_entropy_numpy,
+    load_checkpoint,
+    remove_false_positive_tumor_components,
+)
 
 DEFAULT_INFERENCE_SUBDIR = "two_stage"
 # Experiment roots under inference_comparison/: baseline (nnU-Net only), coarse_to_fine (two-stage), multiview (scripts/infer_multiview.py).
@@ -297,6 +310,41 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Skip stage-2 if coarse tumor voxel count exceeds this.",
     )
+    fp = p.add_argument_group("False-positive tumor components (before stage 2)")
+    fp.add_argument(
+        "--no-fp-component-removal",
+        action="store_true",
+        help="Disable removing whole 3D tumor CCs (see meta fp_component_removal).",
+    )
+    fp.add_argument(
+        "--fp-remove-mean-prob-below",
+        type=float,
+        default=None,
+        help="Remove tumor CC if mean softmax in component < this (overrides meta).",
+    )
+    fp.add_argument(
+        "--fp-remove-max-voxels-small-cc",
+        type=int,
+        default=None,
+        help="Remove tumor CC if voxel count <= this (tiny speckles; overrides meta).",
+    )
+    fp.add_argument(
+        "--fp-no-hu-filter",
+        action="store_true",
+        help="Disable HU narrow-window mean check (dominant FP removal by intensity pattern).",
+    )
+    fp.add_argument(
+        "--fp-hu-narrow-min",
+        type=float,
+        default=None,
+        help="Min mean [0,1] in first HU window inside CC (below → remove). Overrides meta.",
+    )
+    fp.add_argument(
+        "--fp-hu-narrow-max",
+        type=float,
+        default=None,
+        help="Max mean [0,1] in first HU window inside CC (above → remove). Overrides meta.",
+    )
     return p.parse_args()
 
 
@@ -307,11 +355,30 @@ def _normalize_slice(x: np.ndarray) -> np.ndarray:
     return (x - m) / s
 
 
+def _hu_windows_from_meta(
+    meta: dict,
+) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
+    raw = meta.get("hu_windows")
+    if raw is not None:
+        try:
+            return hu_windows_from_json_list(raw)
+        except (ValueError, TypeError):
+            pass
+    return DEFAULT_HU_WINDOWS
+
+
 def _tumor_label(dataset_json: dict) -> int:
     for name, idx in dataset_json.get("labels", {}).items():
         if str(name).lower() == "tumor":
             return int(idx)
     raise KeyError("tumor label not found in dataset.json")
+
+
+def _liver_label(dataset_json: dict) -> int:
+    for name, idx in dataset_json.get("labels", {}).items():
+        if str(name).lower() == "liver":
+            return int(idx)
+    return 1
 
 
 @torch.no_grad()
@@ -329,6 +396,8 @@ def _refine_roi_slices_boundary_aware(
     boundary_erode_iters: int,
     coarse_prob_threshold: float,
     ring_blend_alpha: float = 1.0,
+    in_channels: int = 5,
+    hu_windows: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = DEFAULT_HU_WINDOWS,
 ) -> np.ndarray:
     """
     Tumor probability in [0, 1] inside bbox: coarse softmax (or binary) outside the boundary ring,
@@ -344,18 +413,22 @@ def _refine_roi_slices_boundary_aware(
             coarse2d = probs_np[tumor_label, z, y0:y1, x0:x1].astype(np.float32)
         else:
             coarse2d = (pred_seg[z, y0:y1, x0:x1] == tumor_label).astype(np.float32)
-        unc2d = bernoulli_entropy_numpy(coarse2d)
         nh, nw = img2d.shape
-        ti = torch.from_numpy(_normalize_slice(img2d))[None, None].to(device)
-        tc = torch.from_numpy(coarse2d)[None, None].to(device)
-        tu = torch.from_numpy(unc2d)[None, None].to(device)
-        ti = F.interpolate(ti, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
-        if use_coarse_prob:
-            tc = F.interpolate(tc, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+        if in_channels == 3:
+            unc2d = bernoulli_entropy_numpy(coarse2d)
+            ti = torch.from_numpy(_normalize_slice(img2d))[None, None].to(device)
+            tc = torch.from_numpy(coarse2d)[None, None].to(device)
+            tu = torch.from_numpy(unc2d)[None, None].to(device)
+            ti = F.interpolate(ti, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+            if use_coarse_prob:
+                tc = F.interpolate(tc, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+            else:
+                tc = F.interpolate(tc, size=(h_crop, w_crop), mode="nearest")
+            tu = F.interpolate(tu, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
+            tin = torch.cat([ti, tc, tu], dim=1)
         else:
-            tc = F.interpolate(tc, size=(h_crop, w_crop), mode="nearest")
-        tu = F.interpolate(tu, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
-        tin = torch.cat([ti, tc, tu], dim=1)
+            x5 = prepare_input_tensor_5ch(img2d, coarse2d, crop_hw, hu_windows)
+            tin = torch.from_numpy(x5)[None].to(device)
         logit = model(tin)
         pr = torch.sigmoid(logit)
         pr = F.interpolate(pr, size=(nh, nw), mode="bilinear", align_corners=False)
@@ -421,7 +494,8 @@ def main() -> None:
     _cs = meta.get("crop_size", [256, 256])
     crop_size = (int(_cs[0]), int(_cs[1]))
     use_coarse_prob = bool(meta.get("use_coarse_prob", True))
-    in_channels = int(meta.get("in_channels", 3))
+    in_channels = int(meta.get("in_channels", 5))
+    hu_windows = _hu_windows_from_meta(meta)
     boundary_dilate_iters = int(meta.get("boundary_dilate_iters", 2))
     boundary_erode_iters = int(meta.get("boundary_erode_iters", 2))
     coarse_prob_threshold = float(meta.get("coarse_bin_threshold", 0.5))
@@ -439,6 +513,21 @@ def main() -> None:
         adaptive_cfg.skip_refine_mean_prob_below = float(args.skip_refine_mean_prob_below)
     if args.skip_refine_voxels_above is not None:
         adaptive_cfg.skip_refine_voxels_above = int(args.skip_refine_voxels_above)
+
+    fp_cfg = FpComponentRemovalConfig.from_dict(meta.get("fp_component_removal"))
+    if args.fp_remove_mean_prob_below is not None:
+        fp_cfg = replace(fp_cfg, mean_prob_below=args.fp_remove_mean_prob_below, enabled=True)
+    if args.fp_remove_max_voxels_small_cc is not None:
+        fp_cfg = replace(fp_cfg, max_voxels_small_cc=args.fp_remove_max_voxels_small_cc, enabled=True)
+    if args.fp_hu_narrow_min is not None:
+        fp_cfg = replace(fp_cfg, hu_narrow_mean_min=args.fp_hu_narrow_min, enabled=True)
+    if args.fp_hu_narrow_max is not None:
+        fp_cfg = replace(fp_cfg, hu_narrow_mean_max=args.fp_hu_narrow_max, enabled=True)
+    if args.fp_no_hu_filter:
+        fp_cfg = replace(fp_cfg, hu_filter_enabled=False)
+    if args.no_fp_component_removal:
+        fp_cfg = replace(fp_cfg, enabled=False)
+
     _rp = meta.get("roi_pad_xy", [16, 16])
     _mr = meta.get("min_roi_xy", [32, 32])
     bbox3d_pad = (2, int(_rp[0]), int(_rp[1]))
@@ -492,6 +581,14 @@ def main() -> None:
         prob_dir = None
 
     print(f"Writing predictions to {out_dir.resolve()}")
+    if not args.stage1_only:
+        print(
+            f"fp_component_removal: enabled={fp_cfg.enabled} "
+            f"hu_filter={fp_cfg.hu_filter_enabled} "
+            f"hu_narrow=[{fp_cfg.hu_narrow_mean_min},{fp_cfg.hu_narrow_mean_max}] "
+            f"mean_prob_below={fp_cfg.mean_prob_below} "
+            f"max_voxels_small_cc={fp_cfg.max_voxels_small_cc}"
+        )
     if stage1_export_dir is not None:
         print(f"Also writing stage-1 (nnU-Net) predictions to {stage1_export_dir.resolve()}")
     if args.save_probabilities and prob_dir is not None:
@@ -509,6 +606,7 @@ def main() -> None:
 
     dataset_json = load_json(model_dir / "dataset.json")
     tumor_label = _tumor_label(dataset_json)
+    liver_label = _liver_label(dataset_json)
     file_ending = dataset_json["file_ending"]
 
     # Match scripts/export.py (same stage-1 stack as coarse_to_fine export).
@@ -633,6 +731,19 @@ def main() -> None:
             probs_np = torch.softmax(logits.float(), dim=0).cpu().numpy()
         del logits
 
+        tumor_prob_vol = probs_np[tumor_label] if use_coarse_prob and probs_np is not None else None
+        pred_seg, n_fp_removed = remove_false_positive_tumor_components(
+            pred_seg,
+            tumor_prob_vol,
+            tumor_label,
+            liver_label,
+            fp_cfg,
+            ct_volume=data[0].astype(np.float32),
+            hu_windows=hu_windows,
+        )
+        if n_fp_removed > 0:
+            print(f"  {case_id} fp_component_removal: removed {n_fp_removed} tumor CC(s)")
+
         coarse_bin = threshold_coarse_tumor(pred_seg, tumor_label)
         bbox = bbox3d_from_mask(
             coarse_bin,
@@ -680,6 +791,8 @@ def main() -> None:
                     ad.erode_iters,
                     coarse_prob_threshold,
                     ad.ring_blend_alpha,
+                    in_channels=in_channels,
+                    hu_windows=hu_windows,
                 )
                 final_seg = pred_seg.copy()
                 z0, z1 = bbox.z0, bbox.z1

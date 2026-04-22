@@ -1,4 +1,4 @@
-"""Tiny 2D U-Net with 3 input channels: CT, coarse tumor probability, Bernoulli entropy."""
+"""Tiny 2D U-Net: three HU-window channels + coarse tumor probability + Bernoulli entropy."""
 
 from __future__ import annotations
 
@@ -25,10 +25,11 @@ class ConvBlock(nn.Module):
 class BoundaryAwareTinyUNet2d(nn.Module):
     """
     Compact 2D U-Net.
-    in_channels: 3 — CT slice + coarse tumor probability + uncertainty (entropy of probability).
+    in_channels: 5 — three HU-window views + coarse tumor probability + normalized entropy;
+    legacy 3 — single normalized CT + coarse + entropy (old checkpoints).
     """
 
-    def __init__(self, in_channels: int = 3, base: int = 32):
+    def __init__(self, in_channels: int = 5, base: int = 32):
         super().__init__()
         self.enc1 = ConvBlock(in_channels, base)
         self.enc2 = ConvBlock(base, base * 2)
