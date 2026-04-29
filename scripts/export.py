@@ -17,7 +17,7 @@ import numpy as np
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "2d"))
 
 from coarse_to_fine.dataset import save_manifest_json  # noqa: E402
 

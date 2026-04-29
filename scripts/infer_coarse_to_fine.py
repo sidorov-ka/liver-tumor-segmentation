@@ -43,7 +43,7 @@ import torch
 import torch.nn.functional as F
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "2d"))
 
 from coarse_to_fine.model import TinyUNet2d  # noqa: E402
 from coarse_to_fine.roi import bbox3d_from_mask, threshold_coarse_tumor  # noqa: E402

@@ -1,6 +1,6 @@
 # Liver tumor segmentation (nnU-Net v2)
 
-Мультиклассовая сегментация печени и опухоли на КТ с [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet) на датасете в формате nnU-Net (`Dataset001_LiverTumor`). **coarse_to_fine** — отдельный 2D U-Net по грубой маске nnU-Net. **multiview** — **независимая** надстройка: своя сеть `MultiviewUNet2d` (три фиксированных HU-окна + канал вероятности опухоли), в духе multi-view fusion для узлов на КТ (см. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* и аналоги); чекпоинт обучается отдельно, не из весов coarse_to_fine. Код: `src/multiview`, обучение `scripts/train_multiview.py`, инференс `scripts/infer_multiview.py`. **uncertainty** — ещё одна независимая вторая стадия: `UncertaintyUNet2d` (три HU-окна + вероятность + энтропия Bernoulli), `src/uncertainty`, `scripts/train_uncertainty.py`, `scripts/infer_uncertainty.py`. **boundary_aware_coarse_to_fine** — отдельная вторая стадия: компактный 2D U-Net `BoundaryAwareTinyUNet2d` (по умолчанию **пять** входов: три HU-окна + вероятность опухоли stage-1 + нормированная энтропия; старые раны могли быть с тремя каналами — см. `meta.json`); на инференсе уточнение применяется **только в морфологическом кольце** вокруг грубой маски опухоли, с опционально адаптивной шириной кольца и порогом (`src/boundary_aware_coarse_to_fine`, `scripts/train_boundary_aware_coarse_to_fine.py`, `scripts/infer_boundary_aware_coarse_to_fine.py`).
+Мультиклассовая сегментация печени и опухоли на КТ с [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet) на датасете в формате nnU-Net (`Dataset001_LiverTumor`). **coarse_to_fine** — отдельный 2D U-Net по грубой маске nnU-Net. **multiview** — **независимая** надстройка: своя сеть `MultiviewUNet2d` (три фиксированных HU-окна + канал вероятности опухоли), в духе multi-view fusion для узлов на КТ (см. *Deep Multi-View Fusion Network for Lung Nodule Segmentation* и аналоги); чекпоинт обучается отдельно, не из весов coarse_to_fine. Код: `src/2d/multiview`, обучение `scripts/train_multiview.py`, инференс `scripts/infer_multiview.py`. **uncertainty** — ещё одна независимая вторая стадия: `UncertaintyUNet2d` (три HU-окна + вероятность + энтропия Bernoulli), `src/2d/uncertainty`, `scripts/train_uncertainty.py`, `scripts/infer_uncertainty.py`. **boundary_aware_coarse_to_fine** — отдельная вторая стадия: компактный 2D U-Net `BoundaryAwareTinyUNet2d` (по умолчанию **пять** входов: три HU-окна + вероятность опухоли stage-1 + нормированная энтропия; старые раны могли быть с тремя каналами — см. `meta.json`); на инференсе уточнение применяется **только в морфологическом кольце** вокруг грубой маски опухоли, с опционально адаптивной шириной кольца и порогом (`src/2d/boundary_aware_coarse_to_fine`, `scripts/train_boundary_aware_coarse_to_fine.py`, `scripts/infer_boundary_aware_coarse_to_fine.py`).
 
 ## Требования
 
@@ -228,10 +228,12 @@ liver-tumor-segmentation/
 ├── README.md
 ├── requirements.txt
 ├── LICENSE
-├── src/coarse_to_fine/   # стадия coarse_to_fine: модель, датасет, обучение
-├── src/multiview/        # MultiviewUNet2d, ROI, окна HU (независимо от coarse_to_fine)
-├── src/uncertainty/      # UncertaintyUNet2d, энтропия, ROI (независимо от других вторых стадий)
-├── src/boundary_aware_coarse_to_fine/  # BoundaryAwareTinyUNet2d, кольцо границы, адаптивный инференс
+├── src/2d/               # существующие 2D/second-stage обучения
+├── src/2d/coarse_to_fine/
+├── src/2d/multiview/
+├── src/2d/uncertainty/
+├── src/2d/boundary_aware_coarse_to_fine/
+├── src/3d/               # будущие 3D fine-tuning эксперименты
 ├── data/
 ├── nnUNet_raw/
 ├── nnUNet_preprocessed/

@@ -18,7 +18,7 @@ import torch
 from torch.utils.data import DataLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "2d"))
 
 from multiview.config import MultiviewConfig, multiview_config_to_json_dict  # noqa: E402
 from multiview.dataset import build_multiview_datasets  # noqa: E402

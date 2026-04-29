@@ -35,7 +35,7 @@ import torch
 import torch.nn.functional as F
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "2d"))
 
 from boundary_aware_coarse_to_fine.config import (  # noqa: E402
     DEFAULT_HU_WINDOWS,

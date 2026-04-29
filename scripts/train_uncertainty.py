@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "2d"))
 
 from uncertainty.config import UncertaintyConfig, uncertainty_config_to_json_dict  # noqa: E402
 from uncertainty.dataset import build_uncertainty_datasets  # noqa: E402
