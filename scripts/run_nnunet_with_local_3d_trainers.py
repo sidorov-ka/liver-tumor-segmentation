@@ -44,8 +44,72 @@ def _patch_trainer_lookup(nnunetv2_module: ModuleType, finder: ModuleType) -> No
     finder.recursive_find_python_class = find_with_local_trainers
 
 
+def _load_full_pretrained_weights(network, fname: str, verbose: bool = False) -> None:
+    """Load compatible nnU-Net weights without dropping segmentation heads."""
+    import torch
+    import torch.distributed as dist
+    from torch._dynamo import OptimizedModule
+    from torch.nn.parallel import DistributedDataParallel as DDP
+
+    map_location = (
+        torch.device("cuda", dist.get_rank())
+        if dist.is_initialized()
+        else torch.device("cpu")
+    )
+    saved_model = torch.load(fname, map_location=map_location, weights_only=False)
+    pretrained_dict = saved_model["network_weights"]
+
+    mod = network.module if isinstance(network, DDP) else network
+    if isinstance(mod, OptimizedModule):
+        mod = mod._orig_mod
+
+    model_dict = mod.state_dict()
+    missing_keys = sorted(set(model_dict) - set(pretrained_dict))
+    unexpected_keys = sorted(set(pretrained_dict) - set(model_dict))
+    if missing_keys or unexpected_keys:
+        raise RuntimeError(
+            "Pretrained checkpoint does not exactly match the network. "
+            f"Missing keys: {missing_keys[:10]} "
+            f"{'...' if len(missing_keys) > 10 else ''}; "
+            f"unexpected keys: {unexpected_keys[:10]} "
+            f"{'...' if len(unexpected_keys) > 10 else ''}"
+        )
+
+    shape_mismatches = [
+        (key, pretrained_dict[key].shape, model_dict[key].shape)
+        for key in model_dict
+        if pretrained_dict[key].shape != model_dict[key].shape
+    ]
+    if shape_mismatches:
+        sample = ", ".join(
+            f"{key}: pretrained {src}, model {dst}"
+            for key, src, dst in shape_mismatches[:10]
+        )
+        raise RuntimeError(f"Pretrained checkpoint shape mismatch: {sample}")
+
+    print(
+        "################### Loading full pretrained weights from file ",
+        fname,
+        "###################",
+    )
+    if verbose:
+        print("Below is the list of loaded blocks in pretrained model and nnUNet architecture:")
+        for key, value in pretrained_dict.items():
+            print(key, "shape", value.shape)
+        print("################### Done ###################")
+    mod.load_state_dict(pretrained_dict)
+
+
+def _patch_pretrained_weight_loading() -> None:
+    """Fine-tuning should start from the exact checkpoint, including seg_layers."""
+    import nnunetv2.run.run_training as run_training
+
+    run_training.load_pretrained_weights = _load_full_pretrained_weights
+
+
 def main() -> None:
     _register_local_trainers()
+    _patch_pretrained_weight_loading()
     from nnunetv2.run.run_training import run_training_entry
 
     run_training_entry()

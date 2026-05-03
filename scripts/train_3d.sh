@@ -30,7 +30,8 @@ fi
 if [[ "${SKIP_PREPROCESS}" -eq 0 ]]; then
   nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" \
     -overwrite_target_spacing "${TARGET_SPACING[@]}" \
-    -overwrite_plans_name "${PLANS}"
+    -overwrite_plans_name "${PLANS}" \
+    --clean
 else
   echo "Skipping nnUNetv2_plan_and_preprocess (preprocessed data assumed valid; use after a full preprocess run)."
 fi
