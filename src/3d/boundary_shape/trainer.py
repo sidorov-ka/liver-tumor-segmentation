@@ -43,6 +43,9 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             inside_liver_topk_fraction=config.inside_liver_topk_fraction,
             inside_liver_volume_guard_threshold=config.inside_liver_volume_guard_threshold,
             inside_liver_volume_guard_min_scale=config.inside_liver_volume_guard_min_scale,
+            tversky_guard_weight=config.tversky_guard_weight,
+            tversky_guard_alpha=config.tversky_guard_alpha,
+            tversky_guard_beta=config.tversky_guard_beta,
         )
 
     def initialize(self):
@@ -64,6 +67,9 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             f"inside_liver_topk_fraction={config.inside_liver_topk_fraction}, "
             f"inside_liver_volume_guard_threshold={config.inside_liver_volume_guard_threshold}, "
             f"inside_liver_volume_guard_min_scale={config.inside_liver_volume_guard_min_scale}, "
+            f"tversky_guard_weight={config.tversky_guard_weight}, "
+            f"tversky_guard_alpha={config.tversky_guard_alpha}, "
+            f"tversky_guard_beta={config.tversky_guard_beta}, "
             f"boundary_start_epoch={config.boundary_start_epoch}, "
             f"fp_start_epoch={config.fp_start_epoch}, "
             f"custom_loss_ramp_epochs={config.custom_loss_ramp_epochs}"

@@ -23,6 +23,9 @@ class BoundaryOversegConfig:
     inside_liver_topk_fraction: float = 0.002
     inside_liver_volume_guard_threshold: float = 0.02
     inside_liver_volume_guard_min_scale: float = 0.10
+    tversky_guard_weight: float = 0.05
+    tversky_guard_alpha: float = 0.30
+    tversky_guard_beta: float = 0.70
     boundary_start_epoch: int = 5
     fp_start_epoch: int = 10
     custom_loss_ramp_epochs: int = 10
@@ -77,6 +80,18 @@ class BoundaryOversegConfig:
             inside_liver_volume_guard_min_scale=_env_float(
                 "NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_MIN_SCALE",
                 cls.inside_liver_volume_guard_min_scale,
+            ),
+            tversky_guard_weight=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT",
+                cls.tversky_guard_weight,
+            ),
+            tversky_guard_alpha=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA",
+                cls.tversky_guard_alpha,
+            ),
+            tversky_guard_beta=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA",
+                cls.tversky_guard_beta,
             ),
             boundary_start_epoch=_env_int(
                 "NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH",

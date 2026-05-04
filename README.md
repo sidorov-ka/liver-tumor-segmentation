@@ -88,6 +88,54 @@ nnUNetv2_train 1 2d 0 -tr nnUNetTrainer_100epochs --c
 | Trainer | `nnUNetTrainer_100epochs` |
 | Препроцесс | `-np 1 -npfp 1` (мало RAM) |
 
+### 1.1. 3D nnU-Net и fine-tuning
+
+Для 3D fullres экспериментов используется `3d_fullres` с планом
+`nnUNetPlans_3d_midres125` и target spacing `1.25 1.0 1.0`. Базовый 3D
+тренер:
+
+```bash
+bash scripts/train_3d.sh
+# повтор без препроцесса:
+bash scripts/train_3d.sh --skip-preprocess
+```
+
+Контрольный fine-tune 3D baseline с обычным nnU-Net Dice+CE loss:
+
+```bash
+bash scripts/train_3d_default_finetune.sh --skip-preprocess
+```
+
+Boundary/shape-aware fine-tune стартует из 3D baseline checkpoint и пишет
+результаты в `results_3d_boundary_shape/`:
+
+```bash
+bash scripts/train_3d_boundary_shape.sh --skip-preprocess
+```
+
+По умолчанию он добавляет boundary-ring loss и hard-negative FP penalties
+вне печени и внутри печени. Штраф за FP **внутри печени** volume-aware:
+если опухоль занимает большую долю foreground (`tumor / (tumor + liver)`),
+in-liver FP penalty уменьшается, чтобы не схлопывать большие опухоли.
+Дополнительно включён Tversky guard с `beta > alpha`: он штрафует FN сильнее
+FP во время FP phase и удерживает recall опухоли.
+Основные ручки:
+
+```bash
+NNUNET_BOUNDARY_OVERSEG_OUTSIDE_LIVER_FP_WEIGHT=4.0
+NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_FP_WEIGHT=0.5
+NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_THRESHOLD=0.02
+NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_MIN_SCALE=0.10
+NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT=0.05
+NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA=0.30
+NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA=0.70
+```
+
+Локальные 3D trainer-классы лежат в `src/3d/`; запуск через
+`scripts/run_nnunet_with_local_3d_trainers.py` делает их видимыми для
+nnU-Net и загружает fine-tune weights полностью, включая segmentation head.
+Подробные параметры BoundaryOverseg описаны в `src/3d/boundary_shape/README.md`.
+
 ## 2. Export слайсов (coarse_to_fine, multiview, uncertainty)
 
 Экспорт **только из обученной базовой nnU-Net** (ничего из вторых стадий сюда не подмешивается). Те же `.npz` используются для `train_coarse_to_fine`, `train_multiview`, `train_uncertainty` и `train_boundary_aware_coarse_to_fine`. Уже сделанный экспорт для этой же базовой модели можно не переделывать — переэкспорт нужен, если поменялись nnU-Net, данные или параметры экспорта.
@@ -233,11 +281,13 @@ liver-tumor-segmentation/
 ├── src/2d/multiview/
 ├── src/2d/uncertainty/
 ├── src/2d/boundary_aware_coarse_to_fine/
-├── src/3d/               # будущие 3D fine-tuning эксперименты
+├── src/3d/               # локальные 3D nnU-Net trainers и fine-tuning losses
 ├── data/
 ├── nnUNet_raw/
 ├── nnUNet_preprocessed/
 ├── nnUNet_results/
+├── results_3d_default_finetune/  # 3D fine-tune контроль с default loss (не в git)
+├── results_3d_boundary_shape/    # 3D BoundaryOverseg fine-tune (не в git)
 ├── refinement_export/        # экспорт слайсов (e.g. fold0/train, fold0/val, export_meta.json)
 ├── results_coarse_to_fine/   # только coarse_to_fine (чекпойнты и логи)
 ├── results_multiview/        # только multiview / MultiviewUNet2d (не в git)
@@ -245,6 +295,10 @@ liver-tumor-segmentation/
 ├── results_boundary_aware_coarse_to_fine/  # boundary_aware вторая стадия (не в git)
 └── scripts/
     ├── train.sh                  # стадия 1: nnU-Net план / препроцесс / train
+    ├── train_3d.sh               # 3D fullres baseline
+    ├── train_3d_default_finetune.sh  # 3D fine-tune с default Dice+CE
+    ├── train_3d_boundary_shape.sh    # 3D fine-tune с BoundaryOverseg loss
+    ├── run_nnunet_with_local_3d_trainers.py  # запуск локальных 3D trainer-классов
     ├── train_coarse_to_fine.sh   # обёртка: PYTHONPATH, EXPORT_DIR → train_coarse_to_fine.py
     ├── train_multiview.sh        # то же для train_multiview.py
     ├── train_uncertainty.sh      # то же для train_uncertainty.py

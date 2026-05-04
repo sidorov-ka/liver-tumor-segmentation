@@ -29,6 +29,9 @@ class BoundaryOversegmentationLoss(nn.Module):
         inside_liver_topk_fraction: float = 0.003,
         inside_liver_volume_guard_threshold: float = 0.02,
         inside_liver_volume_guard_min_scale: float = 0.10,
+        tversky_guard_weight: float = 0.05,
+        tversky_guard_alpha: float = 0.30,
+        tversky_guard_beta: float = 0.70,
         smooth: float = 1e-5,
     ) -> None:
         super().__init__()
@@ -50,6 +53,9 @@ class BoundaryOversegmentationLoss(nn.Module):
         self.inside_liver_volume_guard_min_scale = float(
             inside_liver_volume_guard_min_scale
         )
+        self.tversky_guard_weight = float(tversky_guard_weight)
+        self.tversky_guard_alpha = float(tversky_guard_alpha)
+        self.tversky_guard_beta = float(tversky_guard_beta)
         self.smooth = float(smooth)
         self.boundary_loss_scale = 1.0
         self.fp_loss_scale = 1.0
@@ -245,6 +251,39 @@ class BoundaryOversegmentationLoss(nn.Module):
         )
         return outside_liver_loss, inside_liver_loss, inside_liver_scale.mean()
 
+    def _tversky_guard_loss(
+        self,
+        prob: torch.Tensor,
+        tumor: torch.Tensor,
+        valid: torch.Tensor,
+    ) -> torch.Tensor:
+        alpha = max(0.0, float(self.tversky_guard_alpha))
+        beta = max(0.0, float(self.tversky_guard_beta))
+        if alpha == 0 and beta == 0:
+            return prob.new_zeros(())
+
+        prob = prob * valid
+        tumor = tumor * valid
+        non_tumor = (1.0 - tumor) * valid
+        spatial_dims = tuple(range(1, prob.ndim))
+
+        true_positive = (prob * tumor).sum(dim=spatial_dims)
+        false_positive = (prob * non_tumor).sum(dim=spatial_dims)
+        false_negative = ((1.0 - prob) * tumor).sum(dim=spatial_dims)
+        tumor_voxels = tumor.sum(dim=spatial_dims)
+        has_tumor = tumor_voxels > 0
+        if not torch.any(has_tumor):
+            return prob.new_zeros(())
+
+        denominator = (
+            true_positive
+            + alpha * false_positive
+            + beta * false_negative
+            + self.smooth
+        )
+        tversky = (true_positive + self.smooth) / denominator
+        return (1.0 - tversky[has_tumor]).mean()
+
     def forward(
         self,
         outputs: TensorOrDeepSupervision,
@@ -273,6 +312,7 @@ class BoundaryOversegmentationLoss(nn.Module):
         outside_liver_loss = loss.new_zeros(())
         inside_liver_loss = loss.new_zeros(())
         inside_liver_volume_scale = loss.new_ones(())
+        tversky_guard_loss = loss.new_zeros(())
 
         if self.boundary_weight > 0 and boundary_scale > 0:
             boundary_loss = self._boundary_loss(tumor_logits, prob, tumor, valid)
@@ -299,6 +339,9 @@ class BoundaryOversegmentationLoss(nn.Module):
                 + self.inside_liver_fp_weight * inside_liver_loss
             )
             loss = loss + fp_scale * self.overseg_weight * false_positive_loss
+        if self.tversky_guard_weight > 0 and fp_scale > 0:
+            tversky_guard_loss = self._tversky_guard_loss(prob, tumor, valid)
+            loss = loss + fp_scale * self.tversky_guard_weight * tversky_guard_loss
 
         self.last_components = {
             "base_loss": float(base_loss.detach().cpu()),
@@ -306,6 +349,7 @@ class BoundaryOversegmentationLoss(nn.Module):
             "outside_fp_loss": float(outside_liver_loss.detach().cpu()),
             "inside_fp_loss": float(inside_liver_loss.detach().cpu()),
             "inside_fp_volume_scale": float(inside_liver_volume_scale.detach().cpu()),
+            "tversky_guard_loss": float(tversky_guard_loss.detach().cpu()),
             "total_loss": float(loss.detach().cpu()),
             "boundary_scale": boundary_scale,
             "fp_scale": fp_scale,

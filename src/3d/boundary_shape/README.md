@@ -33,6 +33,9 @@ Main knobs are environment variables:
 - `NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_TOPK_FRACTION` default `0.002`
 - `NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_THRESHOLD` default `0.02`
 - `NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_MIN_SCALE` default `0.10`
+- `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT` default `0.05`
+- `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA` default `0.30`
+- `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA` default `0.70`
 - `NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH` default `5`
 - `NNUNET_BOUNDARY_OVERSEG_FP_START_EPOCH` default `10`
 - `NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS` default `10`
@@ -42,3 +45,7 @@ share of the foreground (`tumor / (tumor + liver)`), the in-liver hard-negative
 loss is scaled by `threshold / tumor_fraction`, clamped to
 `[min_scale, 1.0]`. This keeps FP suppression active for small tumors while
 reducing the risk of collapsing very large tumors.
+
+A recall-biased Tversky guard is enabled during the FP phase. It uses soft
+tumor TP/FP/FN with `beta > alpha`, so false negatives are penalized more than
+false positives while the hard-negative terms suppress excess tumor islands.
