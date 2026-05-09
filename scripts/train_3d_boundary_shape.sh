@@ -18,9 +18,23 @@
 #   NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT=0.05
 #   NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA=0.30
 #   NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA=0.70
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_THRESHOLD=0.02
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_MAX_THRESHOLD=0.10
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE=0.35
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS=6
+#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT=0.02
+#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_THRESHOLD=0.05
+#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION=0.85
 #   NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH=5
 #   NNUNET_BOUNDARY_OVERSEG_FP_START_EPOCH=10
 #   NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS=10
+# Reproduce the previous 2026-05-04 Tversky run:
+#   source src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env
+# Reproduce the recall-tuned run that softened FP globally:
+#   source src/3d/boundary_shape/presets/recall_tuned_2026_05_05.env
+# Run placement:
+#   RUN_NAME=my_experiment bash scripts/train_3d_boundary_shape.sh --skip-preprocess
+#   RESULTS_ROOT=/abs/path/to/results_root bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 # Skip heavy preprocessing if cache is already valid:
 #   bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 #   SKIP_NNUNET_PREPROCESS=1 bash scripts/train_3d_boundary_shape.sh
@@ -32,7 +46,8 @@ cd "${REPO_ROOT}"
 export nnUNet_raw="${nnUNet_raw:-${REPO_ROOT}/nnUNet_raw}"
 export nnUNet_preprocessed="${nnUNet_preprocessed:-${REPO_ROOT}/nnUNet_preprocessed}"
 readonly BASE_NNUNET_RESULTS="${BASE_NNUNET_RESULTS:-${REPO_ROOT}/nnUNet_results}"
-readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/results_3d_boundary_shape}"
+readonly RUN_NAME="${RUN_NAME:-$(date +%Y%m%d_%H%M%S)_boundary_adaptive_large_tumor}"
+readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/results_3d_boundary_shape_runs/${RUN_NAME}}"
 export nnUNet_results="${RESULTS_ROOT}"
 
 readonly DATASET_ID=1
@@ -58,6 +73,9 @@ if [[ ! -f "${PRETRAINED_WEIGHTS}" ]]; then
   echo "Missing pretrained weights: ${PRETRAINED_WEIGHTS}" >&2
   exit 1
 fi
+
+mkdir -p "${RESULTS_ROOT}"
+echo "Writing BoundaryOverseg run to: ${RESULTS_ROOT}"
 
 if [[ "${SKIP_PREPROCESS}" -eq 0 ]]; then
   nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" \

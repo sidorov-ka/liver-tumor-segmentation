@@ -46,6 +46,15 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             tversky_guard_weight=config.tversky_guard_weight,
             tversky_guard_alpha=config.tversky_guard_alpha,
             tversky_guard_beta=config.tversky_guard_beta,
+            adaptive_large_tumor_threshold=config.adaptive_large_tumor_threshold,
+            adaptive_large_tumor_max_threshold=(
+                config.adaptive_large_tumor_max_threshold
+            ),
+            adaptive_fp_min_scale=config.adaptive_fp_min_scale,
+            adaptive_ignore_extra_radius=config.adaptive_ignore_extra_radius,
+            under_volume_guard_weight=config.under_volume_guard_weight,
+            under_volume_guard_threshold=config.under_volume_guard_threshold,
+            under_volume_guard_fraction=config.under_volume_guard_fraction,
         )
 
     def initialize(self):
@@ -70,6 +79,13 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             f"tversky_guard_weight={config.tversky_guard_weight}, "
             f"tversky_guard_alpha={config.tversky_guard_alpha}, "
             f"tversky_guard_beta={config.tversky_guard_beta}, "
+            f"adaptive_large_tumor_threshold={config.adaptive_large_tumor_threshold}, "
+            f"adaptive_large_tumor_max_threshold={config.adaptive_large_tumor_max_threshold}, "
+            f"adaptive_fp_min_scale={config.adaptive_fp_min_scale}, "
+            f"adaptive_ignore_extra_radius={config.adaptive_ignore_extra_radius}, "
+            f"under_volume_guard_weight={config.under_volume_guard_weight}, "
+            f"under_volume_guard_threshold={config.under_volume_guard_threshold}, "
+            f"under_volume_guard_fraction={config.under_volume_guard_fraction}, "
             f"boundary_start_epoch={config.boundary_start_epoch}, "
             f"fp_start_epoch={config.fp_start_epoch}, "
             f"custom_loss_ramp_epochs={config.custom_loss_ramp_epochs}"

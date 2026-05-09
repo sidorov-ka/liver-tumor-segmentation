@@ -106,22 +106,25 @@ bash scripts/train_3d.sh --skip-preprocess
 bash scripts/train_3d_default_finetune.sh --skip-preprocess
 ```
 
-Boundary/shape-aware fine-tune стартует из 3D baseline checkpoint и пишет
-результаты в `results_3d_boundary_shape/`:
+Boundary/shape-aware fine-tune стартует из 3D baseline checkpoint. Скрипт по
+умолчанию пишет каждый новый запуск в отдельный каталог
+`results_3d_boundary_shape_runs/<timestamp>_boundary_adaptive_large_tumor/`, чтобы
+не перезаписывать сохранённый `results_3d_boundary_shape/`:
 
 ```bash
 bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 ```
 
 По умолчанию он добавляет boundary-ring loss и hard-negative FP penalties
-вне печени и внутри печени. Штраф за FP **внутри печени** volume-aware:
-если опухоль занимает большую долю foreground (`tumor / (tumor + liver)`),
-in-liver FP penalty уменьшается, чтобы не схлопывать большие опухоли.
-Дополнительно включён Tversky guard с `beta > alpha`: он штрафует FN сильнее
-FP во время FP phase и удерживает recall опухоли.
+вне печени и внутри печени. Новый adaptive large-tumor режим стартует от
+saved-good Tversky-настроек и меняет поведение только когда опухоль занимает
+большую долю foreground (`tumor / (tumor + liver)`): ослабляет FP pressure,
+расширяет ignore radius вокруг GT опухоли и включает слабый under-volume guard.
+Tversky guard с `beta > alpha` остаётся включённым и удерживает recall опухоли.
 Основные ручки:
 
 ```bash
+NNUNET_BOUNDARY_OVERSEG_LR=1e-3
 NNUNET_BOUNDARY_OVERSEG_OUTSIDE_LIVER_FP_WEIGHT=4.0
 NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_FP_WEIGHT=0.5
 NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_THRESHOLD=0.02
@@ -129,7 +132,21 @@ NNUNET_BOUNDARY_OVERSEG_INSIDE_LIVER_VOLUME_GUARD_MIN_SCALE=0.10
 NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT=0.05
 NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA=0.30
 NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA=0.70
+NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_THRESHOLD=0.02
+NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_MAX_THRESHOLD=0.10
+NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE=0.35
+NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS=6
+NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT=0.02
+NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_THRESHOLD=0.05
+NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION=0.85
 ```
+
+Текущий adaptive preset сохранён в
+`src/3d/boundary_shape/presets/adaptive_large_tumor_2026_05_09.env`.
+Предыдущие наборы гиперпараметров сохранены в
+`src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env` и
+`src/3d/boundary_shape/presets/recall_tuned_2026_05_05.env`; их можно
+`source`-нуть перед запуском для воспроизведения.
 
 Локальные 3D trainer-классы лежат в `src/3d/`; запуск через
 `scripts/run_nnunet_with_local_3d_trainers.py` делает их видимыми для
@@ -287,7 +304,8 @@ liver-tumor-segmentation/
 ├── nnUNet_preprocessed/
 ├── nnUNet_results/
 ├── results_3d_default_finetune/  # 3D fine-tune контроль с default loss (не в git)
-├── results_3d_boundary_shape/    # 3D BoundaryOverseg fine-tune (не в git)
+├── results_3d_boundary_shape/    # сохранённый 3D BoundaryOverseg/Tversky run (не в git)
+├── results_3d_boundary_shape_runs/  # новые timestamped BoundaryOverseg runs (не в git)
 ├── refinement_export/        # экспорт слайсов (e.g. fold0/train, fold0/val, export_meta.json)
 ├── results_coarse_to_fine/   # только coarse_to_fine (чекпойнты и логи)
 ├── results_multiview/        # только multiview / MultiviewUNet2d (не в git)

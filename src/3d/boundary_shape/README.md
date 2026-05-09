@@ -11,6 +11,8 @@ Current experiment:
 - adds a tumor boundary-ring BCE+Dice term
 - adds hard-negative tumor FP penalties outside the GT liver and inside the GT
   liver, excluding a small dilated ring around GT tumors
+- scales FP pressure and the ignore radius adaptively for high tumor-burden
+  patches, then adds a weak under-volume guard for large tumors
 
 Files:
 
@@ -36,6 +38,13 @@ Main knobs are environment variables:
 - `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_WEIGHT` default `0.05`
 - `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_ALPHA` default `0.30`
 - `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA` default `0.70`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_THRESHOLD` default `0.02`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_MAX_THRESHOLD` default `0.10`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE` default `0.35`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS` default `6`
+- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT` default `0.02`
+- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_THRESHOLD` default `0.05`
+- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION` default `0.85`
 - `NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH` default `5`
 - `NNUNET_BOUNDARY_OVERSEG_FP_START_EPOCH` default `10`
 - `NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS` default `10`
@@ -49,3 +58,19 @@ reducing the risk of collapsing very large tumors.
 A recall-biased Tversky guard is enabled during the FP phase. It uses soft
 tumor TP/FP/FN with `beta > alpha`, so false negatives are penalized more than
 false positives while the hard-negative terms suppress excess tumor islands.
+
+The adaptive large-tumor mode starts from the saved-good Tversky defaults and
+only changes behavior as `tumor / (tumor + liver)` grows. It linearly reduces FP
+pressure down to `ADAPTIVE_FP_MIN_SCALE`, expands the tumor ignore radius by up
+to `ADAPTIVE_IGNORE_EXTRA_RADIUS`, and applies a weak under-volume penalty only
+when tumor burden is at least `UNDER_VOLUME_GUARD_THRESHOLD`.
+
+Presets:
+
+- `presets/adaptive_large_tumor_2026_05_09.env`: current adaptive defaults.
+- `presets/tversky_guard_2026_05_04.env`: saved-good Tversky run.
+- `presets/recall_tuned_2026_05_05.env`: globally softened recall-tuned run.
+
+The shell wrapper writes new runs under
+`results_3d_boundary_shape_runs/<RUN_NAME>` by default, so
+`results_3d_boundary_shape/` is not overwritten.
