@@ -34,11 +34,15 @@ class BoundaryOversegmentationLoss(nn.Module):
         tversky_guard_beta: float = 0.70,
         adaptive_large_tumor_threshold: float = 0.02,
         adaptive_large_tumor_max_threshold: float = 0.10,
-        adaptive_fp_min_scale: float = 0.35,
-        adaptive_ignore_extra_radius: int = 6,
-        under_volume_guard_weight: float = 0.02,
+        adaptive_fp_min_scale: float = 1.0,
+        adaptive_ignore_extra_radius: int = 0,
+        under_volume_guard_weight: float = 0.0,
         under_volume_guard_threshold: float = 0.05,
         under_volume_guard_fraction: float = 0.85,
+        custom_loss_gate_threshold: float = 0.04,
+        custom_loss_gate_temperature: float = 0.015,
+        custom_loss_gate_min_scale: float = 0.0,
+        under_volume_inverse_gate: bool = False,
         smooth: float = 1e-5,
     ) -> None:
         super().__init__()
@@ -72,6 +76,10 @@ class BoundaryOversegmentationLoss(nn.Module):
         self.under_volume_guard_weight = float(under_volume_guard_weight)
         self.under_volume_guard_threshold = float(under_volume_guard_threshold)
         self.under_volume_guard_fraction = float(under_volume_guard_fraction)
+        self.custom_loss_gate_threshold = float(custom_loss_gate_threshold)
+        self.custom_loss_gate_temperature = float(custom_loss_gate_temperature)
+        self.custom_loss_gate_min_scale = float(custom_loss_gate_min_scale)
+        self.under_volume_inverse_gate = bool(under_volume_inverse_gate)
         self.smooth = float(smooth)
         self.boundary_loss_scale = 1.0
         self.fp_loss_scale = 1.0
@@ -88,6 +96,10 @@ class BoundaryOversegmentationLoss(nn.Module):
     ) -> None:
         self.boundary_loss_scale = max(0.0, min(1.0, float(boundary)))
         self.fp_loss_scale = max(0.0, min(1.0, float(fp)))
+
+    def set_adaptive_fp_min_scale(self, scale: float) -> None:
+        """Lower bound for FP hard-negative scaling when adaptive tumor factor is 1 (runtime curriculum)."""
+        self.adaptive_fp_min_scale = float(max(0.0, min(1.0, scale)))
 
     @staticmethod
     def _full_resolution(x: TensorOrDeepSupervision) -> torch.Tensor:
@@ -206,15 +218,7 @@ class BoundaryOversegmentationLoss(nn.Module):
         tumor: torch.Tensor,
         liver: torch.Tensor,
         valid: torch.Tensor,
-    ) -> tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         spatial_dims = tuple(range(1, tumor.ndim))
         tumor_voxels = (tumor * valid).sum(dim=spatial_dims)
         foreground_voxels = ((tumor + liver).clamp(0.0, 1.0) * valid).sum(
@@ -222,6 +226,29 @@ class BoundaryOversegmentationLoss(nn.Module):
         )
         tumor_fraction = tumor_voxels / foreground_voxels.clamp_min(self.smooth)
         return tumor_voxels, foreground_voxels, tumor_fraction
+
+    def _custom_loss_gate(
+        self,
+        tumor: torch.Tensor,
+        liver: torch.Tensor,
+        valid: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Keep custom BoundaryOverseg terms on small tumors and fade them on large ones."""
+        tumor_voxels, _, tumor_fraction = self._tumor_foreground_fraction(
+            tumor,
+            liver,
+            valid,
+        )
+        threshold = max(0.0, float(self.custom_loss_gate_threshold))
+        temperature = max(float(self.custom_loss_gate_temperature), self.smooth)
+        min_scale = max(0.0, min(1.0, float(self.custom_loss_gate_min_scale)))
+        large_gate = torch.sigmoid((tumor_fraction - threshold) / temperature)
+        custom_gate = 1.0 - large_gate * (1.0 - min_scale)
+        return torch.where(
+            tumor_voxels > 0,
+            custom_gate,
+            torch.ones_like(custom_gate),
+        ), tumor_fraction
 
     def _adaptive_large_tumor_factor(
         self,
@@ -280,26 +307,36 @@ class BoundaryOversegmentationLoss(nn.Module):
         prob: torch.Tensor,
         tumor: torch.Tensor,
         valid: torch.Tensor,
+        sample_weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
         ring = self._boundary_ring(tumor, valid)
         if torch.count_nonzero(ring).item() == 0:
             return prob.new_zeros(())
 
         bce = F.binary_cross_entropy_with_logits(tumor_logits, tumor, reduction="none")
-        bce = (bce * ring).sum() / ring.sum().clamp_min(self.smooth)
+        spatial_dims = tuple(range(1, prob.ndim))
+        ring_sum = ring.sum(dim=spatial_dims)
+        has_ring = ring_sum > 0
+        bce = (bce * ring).sum(dim=spatial_dims) / ring_sum.clamp_min(self.smooth)
 
         pred_ring = prob * ring
         target_ring = tumor * ring
-        intersection = (pred_ring * target_ring).sum(dim=(1, 2, 3))
+        intersection = (pred_ring * target_ring).sum(dim=spatial_dims)
         denominator = (
-            pred_ring.sum(dim=(1, 2, 3))
-            + target_ring.sum(dim=(1, 2, 3))
+            pred_ring.sum(dim=spatial_dims)
+            + target_ring.sum(dim=spatial_dims)
         )
         dice_loss = 1.0 - (
             (2.0 * intersection + self.smooth)
             / (denominator + self.smooth)
         )
-        return bce + dice_loss.mean()
+        per_sample_loss = bce + dice_loss
+        if sample_weights is not None:
+            per_sample_loss = per_sample_loss * sample_weights.to(
+                per_sample_loss.device,
+                per_sample_loss.dtype,
+            )
+        return per_sample_loss[has_ring].mean()
 
     def _hard_false_positive_loss(
         self,
@@ -309,12 +346,21 @@ class BoundaryOversegmentationLoss(nn.Module):
         liver: torch.Tensor,
         background: torch.Tensor,
         valid: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        custom_loss_gate: torch.Tensor,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
         prob = prob * valid
         tumor = tumor * valid
 
         adaptive_factor = self._adaptive_large_tumor_factor(tumor, liver, valid)
-        adaptive_fp_scale = self._adaptive_fp_scale(adaptive_factor)
+        adaptive_fp_scale = self._adaptive_fp_scale(adaptive_factor) * custom_loss_gate
         outside_ignore, outside_ignore_radius = self._adaptive_dilate(
             tumor,
             self.outside_liver_ignore_radius,
@@ -362,6 +408,7 @@ class BoundaryOversegmentationLoss(nn.Module):
         prob: torch.Tensor,
         tumor: torch.Tensor,
         valid: torch.Tensor,
+        sample_weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
         alpha = max(0.0, float(self.tversky_guard_alpha))
         beta = max(0.0, float(self.tversky_guard_beta))
@@ -388,7 +435,13 @@ class BoundaryOversegmentationLoss(nn.Module):
             + self.smooth
         )
         tversky = (true_positive + self.smooth) / denominator
-        return (1.0 - tversky[has_tumor]).mean()
+        per_sample_loss = 1.0 - tversky
+        if sample_weights is not None:
+            per_sample_loss = per_sample_loss * sample_weights.to(
+                per_sample_loss.device,
+                per_sample_loss.dtype,
+            )
+        return per_sample_loss[has_tumor].mean()
 
     def _under_volume_guard_loss(
         self,
@@ -396,6 +449,7 @@ class BoundaryOversegmentationLoss(nn.Module):
         tumor: torch.Tensor,
         liver: torch.Tensor,
         valid: torch.Tensor,
+        sample_weights: torch.Tensor | None = None,
     ) -> torch.Tensor:
         threshold = max(0.0, float(self.under_volume_guard_threshold))
         target_fraction = max(0.0, float(self.under_volume_guard_fraction))
@@ -418,7 +472,13 @@ class BoundaryOversegmentationLoss(nn.Module):
             (required_voxels - predicted_voxels).clamp_min(0.0)
             / tumor_voxels.clamp_min(self.smooth)
         )
-        return relative_deficit[active].square().mean()
+        per_sample_loss = relative_deficit.square()
+        if sample_weights is not None:
+            per_sample_loss = per_sample_loss * sample_weights.to(
+                per_sample_loss.device,
+                per_sample_loss.dtype,
+            )
+        return per_sample_loss[active].mean()
 
     def forward(
         self,
@@ -434,6 +494,7 @@ class BoundaryOversegmentationLoss(nn.Module):
         logits = self._full_resolution(outputs)
         target = self._full_resolution(targets)
         tumor, liver, background, valid = self._target_masks(target)
+        custom_loss_gate, tumor_fraction = self._custom_loss_gate(tumor, liver, valid)
         prob = torch.softmax(logits, dim=1)[:, self.tumor_label]
         other_logits = torch.cat(
             (
@@ -448,6 +509,8 @@ class BoundaryOversegmentationLoss(nn.Module):
         outside_liver_loss = loss.new_zeros(())
         inside_liver_loss = loss.new_zeros(())
         inside_liver_volume_scale = loss.new_ones(())
+        custom_loss_gate_mean = custom_loss_gate.mean()
+        tumor_fraction_mean = tumor_fraction.mean()
         adaptive_large_tumor_factor = loss.new_zeros(())
         adaptive_fp_scale = loss.new_ones(())
         outside_ignore_radius = loss.new_tensor(float(self.outside_liver_ignore_radius))
@@ -456,7 +519,13 @@ class BoundaryOversegmentationLoss(nn.Module):
         under_volume_guard_loss = loss.new_zeros(())
 
         if self.boundary_weight > 0 and boundary_scale > 0:
-            boundary_loss = self._boundary_loss(tumor_logits, prob, tumor, valid)
+            boundary_loss = self._boundary_loss(
+                tumor_logits,
+                prob,
+                tumor,
+                valid,
+                sample_weights=custom_loss_gate,
+            )
             loss = loss + boundary_scale * self.boundary_weight * boundary_loss
         if (
             self.overseg_weight > 0
@@ -478,6 +547,7 @@ class BoundaryOversegmentationLoss(nn.Module):
                 liver,
                 background,
                 valid,
+                custom_loss_gate,
             )
             false_positive_loss = (
                 self.outside_liver_fp_weight * outside_liver_loss
@@ -485,14 +555,24 @@ class BoundaryOversegmentationLoss(nn.Module):
             )
             loss = loss + fp_scale * self.overseg_weight * false_positive_loss
         if self.tversky_guard_weight > 0 and fp_scale > 0:
-            tversky_guard_loss = self._tversky_guard_loss(prob, tumor, valid)
+            tversky_guard_loss = self._tversky_guard_loss(
+                prob,
+                tumor,
+                valid,
+                sample_weights=custom_loss_gate,
+            )
             loss = loss + fp_scale * self.tversky_guard_weight * tversky_guard_loss
         if self.under_volume_guard_weight > 0 and fp_scale > 0:
+            if self.under_volume_inverse_gate:
+                uv_weights = (1.0 - custom_loss_gate).clamp(0.0, 1.0)
+            else:
+                uv_weights = custom_loss_gate
             under_volume_guard_loss = self._under_volume_guard_loss(
                 prob,
                 tumor,
                 liver,
                 valid,
+                sample_weights=uv_weights,
             )
             loss = (
                 loss
@@ -505,14 +585,18 @@ class BoundaryOversegmentationLoss(nn.Module):
             "outside_fp_loss": float(outside_liver_loss.detach().cpu()),
             "inside_fp_loss": float(inside_liver_loss.detach().cpu()),
             "inside_fp_volume_scale": float(inside_liver_volume_scale.detach().cpu()),
+            "custom_loss_gate": float(custom_loss_gate_mean.detach().cpu()),
+            "tumor_fraction": float(tumor_fraction_mean.detach().cpu()),
             "adaptive_large_tumor_factor": float(
                 adaptive_large_tumor_factor.detach().cpu()
             ),
+            "adaptive_fp_min_scale_floor": float(self.adaptive_fp_min_scale),
             "adaptive_fp_scale": float(adaptive_fp_scale.detach().cpu()),
             "outside_ignore_radius": float(outside_ignore_radius.detach().cpu()),
             "inside_ignore_radius": float(inside_ignore_radius.detach().cpu()),
             "tversky_guard_loss": float(tversky_guard_loss.detach().cpu()),
             "under_volume_guard_loss": float(under_volume_guard_loss.detach().cpu()),
+            "under_volume_inverse_gate": float(self.under_volume_inverse_gate),
             "total_loss": float(loss.detach().cpu()),
             "boundary_scale": boundary_scale,
             "fp_scale": fp_scale,

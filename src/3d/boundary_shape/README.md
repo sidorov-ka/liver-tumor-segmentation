@@ -11,8 +11,8 @@ Current experiment:
 - adds a tumor boundary-ring BCE+Dice term
 - adds hard-negative tumor FP penalties outside the GT liver and inside the GT
   liver, excluding a small dilated ring around GT tumors
-- scales FP pressure and the ignore radius adaptively for high tumor-burden
-  patches, then adds a weak under-volume guard for large tumors
+- applies a smooth tumor-burden gate to all custom terms, so large tumors stay
+  close to the default nnU-Net Dice+CE fine-tune
 
 Files:
 
@@ -40,11 +40,19 @@ Main knobs are environment variables:
 - `NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA` default `0.70`
 - `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_THRESHOLD` default `0.02`
 - `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_MAX_THRESHOLD` default `0.10`
-- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE` default `0.35`
-- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS` default `6`
-- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT` default `0.02`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE` default `1.0`
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_START_EPOCH` default `-1` (disabled; if
+  `>= 0`, use floor `1.0` before this epoch, then ramp down to `ADAPTIVE_FP_MIN_SCALE`)
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_RAMP_EPOCHS` default `0` (0 = jump to target
+  at start epoch; `> 0` = linear ramp over that many epochs)
+- `NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS` default `0`
+- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT` default `0.0`
 - `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_THRESHOLD` default `0.05`
 - `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION` default `0.85`
+- `NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_INVERSE_GATE` default `0` (if `1`, under-volume uses weight `(1 - custom_loss_gate)` per sample so large-tumor patches get recall pressure; default `0` keeps weight `custom_loss_gate` as before)
+- `NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_THRESHOLD` default `0.04`
+- `NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_TEMPERATURE` default `0.015`
+- `NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_MIN_SCALE` default `0.0`
 - `NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH` default `5`
 - `NNUNET_BOUNDARY_OVERSEG_FP_START_EPOCH` default `10`
 - `NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS` default `10`
@@ -59,18 +67,30 @@ A recall-biased Tversky guard is enabled during the FP phase. It uses soft
 tumor TP/FP/FN with `beta > alpha`, so false negatives are penalized more than
 false positives while the hard-negative terms suppress excess tumor islands.
 
-The adaptive large-tumor mode starts from the saved-good Tversky defaults and
-only changes behavior as `tumor / (tumor + liver)` grows. It linearly reduces FP
-pressure down to `ADAPTIVE_FP_MIN_SCALE`, expands the tumor ignore radius by up
-to `ADAPTIVE_IGNORE_EXTRA_RADIUS`, and applies a weak under-volume penalty only
-when tumor burden is at least `UNDER_VOLUME_GUARD_THRESHOLD`.
+The size-gated mode starts from the saved-good Tversky defaults. It computes a
+per-sample `tumor_fraction = tumor / (tumor + liver)` and uses
+`1 - sigmoid((tumor_fraction - threshold) / temperature)` as a multiplier for
+all custom additive loss terms. Small tumors keep BoundaryOverseg behavior;
+large tumors mostly fall back to default Dice+CE fine-tuning. Optional
+**inverse-gated under-volume** (`NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_INVERSE_GATE=1`)
+reweights the under-volume guard by `(1 - custom_loss_gate)` so anti-undershoot
+pressure applies mainly on those large-tumor patches (without turning on the
+full adaptive-large FP relaxation path).
 
 Presets:
 
-- `presets/adaptive_large_tumor_2026_05_09.env`: current adaptive defaults.
+- `presets/size_gated_boundary_2026_05_09.env`: current size-gated defaults.
+- `presets/size_gated_large_under_volume_2026_05_10.env`: **same as size-gated** + mild under-volume with **inverse gate** (recall pressure on low-gate / large-tumor patches) for global Dice / large cases.
+- `presets/adaptive_large_tumor_2026_05_09.env`: aggressive adaptive-large-tumor run.
 - `presets/tversky_guard_2026_05_04.env`: saved-good Tversky run.
 - `presets/recall_tuned_2026_05_05.env`: globally softened recall-tuned run.
 
+Training is launched via `scripts/train_3d_boundary_shape.sh`, which forwards
+`--val_best` to nnU-Net by default so `fold_*/validation/` uses
+`checkpoint_best.pth`. Set `NNUNET_VALIDATION_WITH_BEST=0` for final-epoch
+validation.
+
 The shell wrapper writes new runs under
-`results_3d_boundary_shape_runs/<RUN_NAME>` by default, so
-`results_3d_boundary_shape/` is not overwritten.
+`results_3d_boundary_shape_runs/<RUN_NAME>`. The reference saved-good run lives at
+`results_3d_boundary_shape_runs/20260504_083549_saved_good_boundary/` (run id from training start in `training_log_2026_5_4_08_35_49.txt`). Re-validate
+all runs with `scripts/revalidate_3d_boundary_shape_runs.sh`.

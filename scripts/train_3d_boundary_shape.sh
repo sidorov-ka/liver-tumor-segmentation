@@ -20,11 +20,17 @@
 #   NNUNET_BOUNDARY_OVERSEG_TVERSKY_GUARD_BETA=0.70
 #   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_THRESHOLD=0.02
 #   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_LARGE_TUMOR_MAX_THRESHOLD=0.10
-#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE=0.35
-#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS=6
-#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT=0.02
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE=1.0
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_START_EPOCH=-1
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_RAMP_EPOCHS=0
+#   NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS=0
+#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_WEIGHT=0.0
 #   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_THRESHOLD=0.05
 #   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION=0.85
+#   NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_INVERSE_GATE=0
+#   NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_THRESHOLD=0.04
+#   NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_TEMPERATURE=0.015
+#   NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_MIN_SCALE=0.0
 #   NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH=5
 #   NNUNET_BOUNDARY_OVERSEG_FP_START_EPOCH=10
 #   NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS=10
@@ -32,12 +38,23 @@
 #   source src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env
 # Reproduce the recall-tuned run that softened FP globally:
 #   source src/3d/boundary_shape/presets/recall_tuned_2026_05_05.env
+# Reproduce the failed adaptive large-tumor run:
+#   source src/3d/boundary_shape/presets/adaptive_large_tumor_2026_05_09.env
+# Size-gated + inverse under-volume (large-patch recall nudge, same knobs as size_gated otherwise):
+#   source src/3d/boundary_shape/presets/size_gated_large_under_volume_2026_05_10.env
+#   RUN_NAME=$(date +%Y%m%d_%H%M%S)_boundary_size_gated_large_uv bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 # Run placement:
 #   RUN_NAME=my_experiment bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 #   RESULTS_ROOT=/abs/path/to/results_root bash scripts/train_3d_boundary_shape.sh --skip-preprocess
+# Все раны (включая 20260504_083549_saved_good_boundary) лежат под results_3d_boundary_shape_runs/.
+# Массовая перевалидация: bash scripts/revalidate_3d_boundary_shape_runs.sh
 # Skip heavy preprocessing if cache is already valid:
 #   bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 #   SKIP_NNUNET_PREPROCESS=1 bash scripts/train_3d_boundary_shape.sh
+#
+# Full-volume fold_*/validation uses checkpoint_best.pth (nnU-Net --val_best) by default.
+# To write validation from the final epoch instead (old behaviour):
+#   NNUNET_VALIDATION_WITH_BEST=0 bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,7 +63,7 @@ cd "${REPO_ROOT}"
 export nnUNet_raw="${nnUNet_raw:-${REPO_ROOT}/nnUNet_raw}"
 export nnUNet_preprocessed="${nnUNet_preprocessed:-${REPO_ROOT}/nnUNet_preprocessed}"
 readonly BASE_NNUNET_RESULTS="${BASE_NNUNET_RESULTS:-${REPO_ROOT}/nnUNet_results}"
-readonly RUN_NAME="${RUN_NAME:-$(date +%Y%m%d_%H%M%S)_boundary_adaptive_large_tumor}"
+readonly RUN_NAME="${RUN_NAME:-$(date +%Y%m%d_%H%M%S)_boundary_size_gated}"
 readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/results_3d_boundary_shape_runs/${RUN_NAME}}"
 export nnUNet_results="${RESULTS_ROOT}"
 
@@ -86,8 +103,15 @@ else
   echo "Skipping nnUNetv2_plan_and_preprocess (preprocessed data assumed valid; use after a full preprocess run)."
 fi
 
+VAL_BEST_ARGS=()
+if [[ "${NNUNET_VALIDATION_WITH_BEST:-1}" != "0" ]]; then
+  VAL_BEST_ARGS=(--val_best)
+  echo "nnU-Net post-training validation will use checkpoint_best.pth (fold_${FOLD}/validation/)."
+fi
+
 "${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/scripts/run_nnunet_with_local_3d_trainers.py" \
   "${DATASET_ID}" "${CONFIGURATION}" "${FOLD}" \
   -tr "${TRAINER}" \
   -p "${PLANS}" \
-  -pretrained_weights "${PRETRAINED_WEIGHTS}"
+  -pretrained_weights "${PRETRAINED_WEIGHTS}" \
+  "${VAL_BEST_ARGS[@]}"

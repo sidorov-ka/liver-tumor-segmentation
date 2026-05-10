@@ -28,11 +28,22 @@ class BoundaryOversegConfig:
     tversky_guard_beta: float = 0.70
     adaptive_large_tumor_threshold: float = 0.02
     adaptive_large_tumor_max_threshold: float = 0.10
-    adaptive_fp_min_scale: float = 0.35
-    adaptive_ignore_extra_radius: int = 6
-    under_volume_guard_weight: float = 0.02
+    adaptive_fp_min_scale: float = 1.0
+    #: If >= 0, `adaptive_fp_min_scale` is reached only after this epoch: before
+    #: that, use 1.0 (full FP hard-negative weights). Linear ramp over
+    #: `adaptive_fp_min_schedule_ramp_epochs`; if ramp is 0, jump to target at start.
+    adaptive_fp_min_schedule_start_epoch: int = -1
+    adaptive_fp_min_schedule_ramp_epochs: int = 0
+    adaptive_ignore_extra_radius: int = 0
+    under_volume_guard_weight: float = 0.0
     under_volume_guard_threshold: float = 0.05
     under_volume_guard_fraction: float = 0.85
+    #: If True, under-volume uses weight ``(1 - custom_loss_gate)`` per sample
+    #: (strong on large-tumor / low-gate patches); default False keeps ``custom_loss_gate``.
+    under_volume_inverse_gate: bool = False
+    custom_loss_gate_threshold: float = 0.04
+    custom_loss_gate_temperature: float = 0.015
+    custom_loss_gate_min_scale: float = 0.0
     boundary_start_epoch: int = 5
     fp_start_epoch: int = 10
     custom_loss_ramp_epochs: int = 10
@@ -112,6 +123,14 @@ class BoundaryOversegConfig:
                 "NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_MIN_SCALE",
                 cls.adaptive_fp_min_scale,
             ),
+            adaptive_fp_min_schedule_start_epoch=_env_int(
+                "NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_START_EPOCH",
+                cls.adaptive_fp_min_schedule_start_epoch,
+            ),
+            adaptive_fp_min_schedule_ramp_epochs=_env_int(
+                "NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_FP_SCHEDULE_RAMP_EPOCHS",
+                cls.adaptive_fp_min_schedule_ramp_epochs,
+            ),
             adaptive_ignore_extra_radius=_env_int(
                 "NNUNET_BOUNDARY_OVERSEG_ADAPTIVE_IGNORE_EXTRA_RADIUS",
                 cls.adaptive_ignore_extra_radius,
@@ -128,6 +147,22 @@ class BoundaryOversegConfig:
                 "NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_GUARD_FRACTION",
                 cls.under_volume_guard_fraction,
             ),
+            under_volume_inverse_gate=_env_bool(
+                "NNUNET_BOUNDARY_OVERSEG_UNDER_VOLUME_INVERSE_GATE",
+                cls.under_volume_inverse_gate,
+            ),
+            custom_loss_gate_threshold=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_THRESHOLD",
+                cls.custom_loss_gate_threshold,
+            ),
+            custom_loss_gate_temperature=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_TEMPERATURE",
+                cls.custom_loss_gate_temperature,
+            ),
+            custom_loss_gate_min_scale=_env_float(
+                "NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_MIN_SCALE",
+                cls.custom_loss_gate_min_scale,
+            ),
             boundary_start_epoch=_env_int(
                 "NNUNET_BOUNDARY_OVERSEG_BOUNDARY_START_EPOCH",
                 cls.boundary_start_epoch,
@@ -141,6 +176,18 @@ class BoundaryOversegConfig:
                 cls.custom_loss_ramp_epochs,
             ),
         )
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None or value.strip() == "":
+        return default
+    v = value.strip().lower()
+    if v in ("1", "true", "yes", "y", "on"):
+        return True
+    if v in ("0", "false", "no", "n", "off"):
+        return False
+    return bool(int(v))
 
 
 def _env_float(name: str, default: float) -> float:

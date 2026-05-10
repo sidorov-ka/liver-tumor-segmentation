@@ -55,6 +55,10 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             under_volume_guard_weight=config.under_volume_guard_weight,
             under_volume_guard_threshold=config.under_volume_guard_threshold,
             under_volume_guard_fraction=config.under_volume_guard_fraction,
+            under_volume_inverse_gate=config.under_volume_inverse_gate,
+            custom_loss_gate_threshold=config.custom_loss_gate_threshold,
+            custom_loss_gate_temperature=config.custom_loss_gate_temperature,
+            custom_loss_gate_min_scale=config.custom_loss_gate_min_scale,
         )
 
     def initialize(self):
@@ -81,11 +85,17 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             f"tversky_guard_beta={config.tversky_guard_beta}, "
             f"adaptive_large_tumor_threshold={config.adaptive_large_tumor_threshold}, "
             f"adaptive_large_tumor_max_threshold={config.adaptive_large_tumor_max_threshold}, "
-            f"adaptive_fp_min_scale={config.adaptive_fp_min_scale}, "
+            f"adaptive_fp_min_scale(target)={config.adaptive_fp_min_scale}, "
+            f"adaptive_fp_min_schedule_start_epoch={config.adaptive_fp_min_schedule_start_epoch}, "
+            f"adaptive_fp_min_schedule_ramp_epochs={config.adaptive_fp_min_schedule_ramp_epochs}, "
             f"adaptive_ignore_extra_radius={config.adaptive_ignore_extra_radius}, "
             f"under_volume_guard_weight={config.under_volume_guard_weight}, "
             f"under_volume_guard_threshold={config.under_volume_guard_threshold}, "
             f"under_volume_guard_fraction={config.under_volume_guard_fraction}, "
+            f"under_volume_inverse_gate={config.under_volume_inverse_gate}, "
+            f"custom_loss_gate_threshold={config.custom_loss_gate_threshold}, "
+            f"custom_loss_gate_temperature={config.custom_loss_gate_temperature}, "
+            f"custom_loss_gate_min_scale={config.custom_loss_gate_min_scale}, "
             f"boundary_start_epoch={config.boundary_start_epoch}, "
             f"fp_start_epoch={config.fp_start_epoch}, "
             f"custom_loss_ramp_epochs={config.custom_loss_ramp_epochs}"
@@ -96,6 +106,23 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
         if current_epoch < start_epoch:
             return 0.0
         return min(1.0, (current_epoch - start_epoch + 1) / max(ramp_epochs, 1))
+
+    def _effective_adaptive_fp_min_scale(self) -> float:
+        """Warmup at 1.0, then linear ramp down to config.adaptive_fp_min_scale."""
+        config = self.boundary_overseg_config
+        target = float(config.adaptive_fp_min_scale)
+        target = max(0.0, min(1.0, target))
+        start = int(config.adaptive_fp_min_schedule_start_epoch)
+        if start < 0:
+            return target
+        epoch = int(self.current_epoch)
+        if epoch < start:
+            return 1.0
+        ramp = int(config.adaptive_fp_min_schedule_ramp_epochs)
+        if ramp <= 0:
+            return target
+        progress = min(1.0, (epoch - start + 1) / float(max(ramp, 1)))
+        return 1.0 + (target - 1.0) * progress
 
     def on_train_epoch_start(self):
         super().on_train_epoch_start()
@@ -111,9 +138,12 @@ class nnUNetTrainer_150_BoundaryOverseg_50epochs(nnUNetTrainer_150):
             config.custom_loss_ramp_epochs,
         )
         self.loss.set_custom_loss_scales(boundary_scale, fp_scale)
+        adaptive_fp_m = self._effective_adaptive_fp_min_scale()
+        self.loss.set_adaptive_fp_min_scale(adaptive_fp_m)
         self.print_to_log_file(
             "BoundaryOverseg custom loss scales: "
-            f"boundary={boundary_scale:.4f}, fp={fp_scale:.4f}"
+            f"boundary={boundary_scale:.4f}, fp={fp_scale:.4f}, "
+            f"adaptive_fp_min_scale={adaptive_fp_m:.4f}"
         )
 
     def on_train_epoch_end(self, train_outputs):
