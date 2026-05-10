@@ -2,7 +2,7 @@
   "model_label": "Boundary saved good",
   "baseline_label": "Default fine-tune",
   "n_cases": 23,
-  "model_dir": "/home/kasid/projects/liver-tumor-segmentation/results_3d_boundary_shape/Dataset001_LiverTumor/nnUNetTrainer_150_BoundaryOverseg_50epochs__nnUNetPlans_3d_midres125__3d_fullres/fold_0/validation",
+  "model_dir": "/home/kasid/projects/liver-tumor-segmentation/results_3d_boundary_shape_runs/20260504_083549_saved_good_boundary/Dataset001_LiverTumor/nnUNetTrainer_150_BoundaryOverseg_50epochs__nnUNetPlans_3d_midres125__3d_fullres/fold_0/validation",
   "baseline_dir": "/home/kasid/projects/liver-tumor-segmentation/results_3d_default_finetune/Dataset001_LiverTumor/nnUNetTrainer_150_DefaultFinetune_50epochs__nnUNetPlans_3d_midres125__3d_fullres/fold_0/validation",
   "gt_dir": "/home/kasid/projects/liver-tumor-segmentation/nnUNet_preprocessed/Dataset001_LiverTumor/gt_segmentations",
   "delta_dice": {

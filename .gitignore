@@ -47,8 +47,6 @@ results_boundary_aware_coarse_to_fine/*
 !results_boundary_aware_coarse_to_fine/.gitkeep
 results_3d_default_finetune/*
 !results_3d_default_finetune/.gitkeep
-results_3d_boundary_shape/*
-!results_3d_boundary_shape/.gitkeep
 results_3d_boundary_shape_runs/*
 !results_3d_boundary_shape_runs/.gitkeep
 # legacy folder names (local only)

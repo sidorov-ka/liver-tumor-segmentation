@@ -7,6 +7,10 @@
 # Skip heavy preprocessing if cache is already valid:
 #   bash scripts/train_3d_default_finetune.sh --skip-preprocess
 #   SKIP_NNUNET_PREPROCESS=1 bash scripts/train_3d_default_finetune.sh
+#
+# Full-volume fold_*/validation uses checkpoint_best.pth (nnU-Net --val_best) by default.
+# For validation from the final epoch instead:
+#   NNUNET_VALIDATION_WITH_BEST=0 bash scripts/train_3d_default_finetune.sh --skip-preprocess
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -51,8 +55,15 @@ else
   echo "Skipping nnUNetv2_plan_and_preprocess (preprocessed data assumed valid; use after a full preprocess run)."
 fi
 
+VAL_BEST_ARGS=()
+if [[ "${NNUNET_VALIDATION_WITH_BEST:-1}" != "0" ]]; then
+  VAL_BEST_ARGS=(--val_best)
+  echo "nnU-Net post-training validation will use checkpoint_best.pth (fold_${FOLD}/validation/)."
+fi
+
 "${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/scripts/run_nnunet_with_local_3d_trainers.py" \
   "${DATASET_ID}" "${CONFIGURATION}" "${FOLD}" \
   -tr "${TRAINER}" \
   -p "${PLANS}" \
-  -pretrained_weights "${PRETRAINED_WEIGHTS}"
+  -pretrained_weights "${PRETRAINED_WEIGHTS}" \
+  "${VAL_BEST_ARGS[@]}"

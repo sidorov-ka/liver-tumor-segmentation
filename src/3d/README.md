@@ -13,13 +13,19 @@ The first fine-tuning experiment is implemented as a repo-local nnU-Net trainer:
 - Implementation: `boundary_shape/`
 - nnU-Net discovery shim: `nnunetv2/training/nnUNetTrainer/`
 - Entry point: `scripts/train_3d_boundary_shape.sh`
-- Boundary/shape output root: `results_3d_boundary_shape/`
+- Boundary/shape output root: `results_3d_boundary_shape_runs/` (saved-good run:
+  `20260504_083549_saved_good_boundary/`; новые раны — с timestamp в имени каталога)
 - Starts from: `nnUNetTrainer_150__nnUNetPlans_3d_midres125__3d_fullres/fold_0/checkpoint_final.pth`
 - Changes: loss only; architecture, plans, input channels, and inference stay aligned with the 150-epoch baseline.
 
 Both launch scripts read the baseline checkpoint from `BASE_NNUNET_RESULTS`
 (default: `nnUNet_results/`) and write their own nnU-Net output tree under the
 experiment-specific result root.
+
+After training, full-volume predictions are written to `fold_*/validation/`.
+Both `train_3d_default_finetune.sh` and `train_3d_boundary_shape.sh` pass
+**`--val_best`** by default (validate with `checkpoint_best.pth`). Set
+`NNUNET_VALIDATION_WITH_BEST=0` to validate with final-epoch weights.
 
 Compare the control trainer against `boundary_shape` to separate the effect of
 additional training time from the effect of the boundary/over-segmentation loss.
