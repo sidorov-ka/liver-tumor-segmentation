@@ -158,12 +158,9 @@ NNUNET_BOUNDARY_OVERSEG_CUSTOM_LOSS_GATE_MIN_SCALE=0.0
 
 Текущий size-gated preset сохранён в
 `src/3d/boundary_shape/presets/size_gated_boundary_2026_05_09.env`.
-Доработка того же набора для крупных опухолей (inverse under-volume) —
-`src/3d/boundary_shape/presets/size_gated_large_under_volume_2026_05_10.env`.
 Предыдущие наборы гиперпараметров сохранены в
-`src/3d/boundary_shape/presets/adaptive_large_tumor_2026_05_09.env`,
-`src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env` и
-`src/3d/boundary_shape/presets/recall_tuned_2026_05_05.env`; их можно
+`src/3d/boundary_shape/presets/adaptive_large_tumor_2026_05_09.env` и
+`src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env`; их можно
 `source`-нуть перед запуском для воспроизведения.
 
 Массовая перевалидация всех BoundaryOverseg ранов (одинаково `--val` и по умолчанию

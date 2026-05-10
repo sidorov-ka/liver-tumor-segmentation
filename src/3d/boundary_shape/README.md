@@ -80,10 +80,8 @@ full adaptive-large FP relaxation path).
 Presets:
 
 - `presets/size_gated_boundary_2026_05_09.env`: current size-gated defaults.
-- `presets/size_gated_large_under_volume_2026_05_10.env`: **same as size-gated** + mild under-volume with **inverse gate** (recall pressure on low-gate / large-tumor patches) for global Dice / large cases.
 - `presets/adaptive_large_tumor_2026_05_09.env`: aggressive adaptive-large-tumor run.
 - `presets/tversky_guard_2026_05_04.env`: saved-good Tversky run.
-- `presets/recall_tuned_2026_05_05.env`: globally softened recall-tuned run.
 
 Training is launched via `scripts/train_3d_boundary_shape.sh`, which forwards
 `--val_best` to nnU-Net by default so `fold_*/validation/` uses

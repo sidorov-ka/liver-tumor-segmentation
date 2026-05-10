@@ -36,13 +36,8 @@
 #   NNUNET_BOUNDARY_OVERSEG_RAMP_EPOCHS=10
 # Reproduce the previous 2026-05-04 Tversky run:
 #   source src/3d/boundary_shape/presets/tversky_guard_2026_05_04.env
-# Reproduce the recall-tuned run that softened FP globally:
-#   source src/3d/boundary_shape/presets/recall_tuned_2026_05_05.env
 # Reproduce the failed adaptive large-tumor run:
 #   source src/3d/boundary_shape/presets/adaptive_large_tumor_2026_05_09.env
-# Size-gated + inverse under-volume (large-patch recall nudge, same knobs as size_gated otherwise):
-#   source src/3d/boundary_shape/presets/size_gated_large_under_volume_2026_05_10.env
-#   RUN_NAME=$(date +%Y%m%d_%H%M%S)_boundary_size_gated_large_uv bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 # Run placement:
 #   RUN_NAME=my_experiment bash scripts/train_3d_boundary_shape.sh --skip-preprocess
 #   RESULTS_ROOT=/abs/path/to/results_root bash scripts/train_3d_boundary_shape.sh --skip-preprocess
