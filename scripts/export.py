@@ -3,7 +3,9 @@
 Export nnU-Net v2 (Isensee et al.) stage-1 predictions + paired slices for stage-2 scripts
 (coarse_to_fine, multiview, uncertainty).
 
-Tensors align with nnU-Net training; default tile step ``0.75`` matches ``infer_coarse_to_fine``. Re-export if the base model, data, or export options change.
+Tensors align with nnU-Net training; default tile step ``0.75`` matches ``infer_coarse_to_fine``.
+Repo-local 3D trainers (BoundaryOverseg, default finetune) are registered like
+``run_nnunet_with_local_3d_trainers.py``. Re-export if the base model, data, or export options change.
 """
 
 from __future__ import annotations
@@ -101,9 +103,25 @@ def _tumor_label(dataset_json: dict) -> int:
     raise KeyError("No 'tumor' entry in dataset.json labels")
 
 
+def _register_local_3d_trainers() -> None:
+    """Same discovery shim as ``run_nnunet_with_local_3d_trainers.py`` (BoundaryOverseg / default finetune)."""
+    scripts = REPO_ROOT / "scripts"
+    p = str(scripts)
+    if p not in sys.path:
+        sys.path.insert(0, p)
+    from run_nnunet_with_local_3d_trainers import _register_local_trainers
+
+    _register_local_trainers()
+
+
 def main() -> None:
     args = _parse_args()
     repo = REPO_ROOT
+    raw_d, pre_d, res_d = _repo_nnunet_defaults(repo)
+    os.environ.setdefault("nnUNet_raw", raw_d)
+    os.environ.setdefault("nnUNet_preprocessed", pre_d)
+    os.environ.setdefault("nnUNet_results", res_d)
+    _register_local_3d_trainers()
     raw_root = Path(args.nnunet_raw or _repo_nnunet_defaults(repo)[0])
     pre_root = Path(args.nnunet_preprocessed or _repo_nnunet_defaults(repo)[1])
     out_root = Path(args.output_dir)

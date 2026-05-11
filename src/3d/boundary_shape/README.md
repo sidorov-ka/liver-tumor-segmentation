@@ -88,7 +88,8 @@ Training is launched via `scripts/train_3d_boundary_shape.sh`, which forwards
 `checkpoint_best.pth`. Set `NNUNET_VALIDATION_WITH_BEST=0` for final-epoch
 validation.
 
-The shell wrapper writes new runs under
-`results_3d_boundary_shape_runs/<RUN_NAME>`. The reference saved-good run lives at
-`results_3d_boundary_shape_runs/20260504_083549_saved_good_boundary/` (run id from training start in `training_log_2026_5_4_08_35_49.txt`). Re-validate
-all runs with `scripts/revalidate_3d_boundary_shape_runs.sh`.
+The shell wrapper writes new runs under `results_3d_boundary_shape_runs/<RUN_NAME>`.
+Reference result folders in this repo’s workflow: `20260504_083549_saved_good_boundary/`,
+`20260509_131406_boundary_adaptive_large_tumor/`, `20260509_160927_boundary_size_gated/`
+(saved-good, adaptive-large-tumor, size-gated). Re-validate with
+`scripts/revalidate_3d_boundary_shape_runs.sh`.
