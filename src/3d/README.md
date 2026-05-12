@@ -35,4 +35,8 @@ Planned experiment groups:
 - `boundary_shape`: boundary-aware and over-segmentation-aware losses.
 - `default_finetune`: default-loss fine-tuning control.
 - `multiwindow`: multi-HU-window 3D input variants.
+  - Trainer: `nnUNetTrainer_150_MultiWindowRefine_50epochs` (`multiwindow/`)
+  - Scripts: `scripts/cache_tumor_prob_for_multiwindow.py`, `scripts/train_3d_multiwindow_refinement.sh`, `scripts/infer_multiwindow_refinement_3d.py`
+  - Output root: `results_3d_multiwindow_runs/`
+  - See `multiwindow/README.md`.
 - `hard_negative`: hard-negative and component-aware fine-tuning.

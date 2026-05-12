@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import torch
-from nnunetv2.training.nnUNetTrainer.variants.training_length.nnUNetTrainer_Xepochs import (
-    nnUNetTrainer_150,
-)
+from nnunet_trainer_150_compat import nnUNetTrainer_150
 
 from boundary_shape.config import BoundaryOversegConfig
 from boundary_shape.losses import BoundaryOversegmentationLoss

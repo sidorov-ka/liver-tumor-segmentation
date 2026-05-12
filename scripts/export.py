@@ -4,7 +4,7 @@ Export nnU-Net v2 (Isensee et al.) stage-1 predictions + paired slices for stage
 (coarse_to_fine, multiview, uncertainty).
 
 Tensors align with nnU-Net training; default tile step ``0.75`` matches ``infer_coarse_to_fine``.
-Repo-local 3D trainers (BoundaryOverseg, default finetune) are registered like
+Repo-local 3D trainers (BoundaryOverseg, default finetune, multi-window refinement) are registered like
 ``run_nnunet_with_local_3d_trainers.py``. Re-export if the base model, data, or export options change.
 """
 

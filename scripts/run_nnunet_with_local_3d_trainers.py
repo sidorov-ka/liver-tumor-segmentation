@@ -46,6 +46,8 @@ def _patch_trainer_lookup(nnunetv2_module: ModuleType, finder: ModuleType) -> No
 
 def _load_full_pretrained_weights(network, fname: str, verbose: bool = False) -> None:
     """Load compatible nnU-Net weights without dropping segmentation heads."""
+    import os
+
     import torch
     import torch.distributed as dist
     from torch._dynamo import OptimizedModule
@@ -64,6 +66,30 @@ def _load_full_pretrained_weights(network, fname: str, verbose: bool = False) ->
         mod = mod._orig_mod
 
     model_dict = mod.state_dict()
+    partial = os.environ.get("NNUNET_PRETRAINED_PARTIAL", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "y",
+    )
+    if partial:
+        matched = 0
+        skipped_shape = 0
+        new_sd = {k: v.clone() for k, v in model_dict.items()}
+        for k in new_sd:
+            if k in pretrained_dict and pretrained_dict[k].shape == new_sd[k].shape:
+                new_sd[k] = pretrained_dict[k].to(dtype=new_sd[k].dtype, device=new_sd[k].device)
+                matched += 1
+            elif k in pretrained_dict:
+                skipped_shape += 1
+        print(
+            "################### Partial pretrained load from",
+            fname,
+            f"(matched_tensors={matched}, skipped_shape_mismatch={skipped_shape}) ###################",
+        )
+        mod.load_state_dict(new_sd, strict=True)
+        return
+
     missing_keys = sorted(set(model_dict) - set(pretrained_dict))
     unexpected_keys = sorted(set(pretrained_dict) - set(model_dict))
     if missing_keys or unexpected_keys:

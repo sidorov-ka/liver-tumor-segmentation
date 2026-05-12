@@ -193,16 +193,14 @@ nnU-Net и загружает fine-tune weights полностью, включа
 python3 scripts/export.py --output-dir refinement_export/fold0
 ```
 
-**3D fine-tune (BoundaryOverseg, `checkpoint_best`):** готовые каталоги под multiview:
+**3D multi-window refinement (полные объёмы, не слайсы):** карты вероятности опухоли для `NNUNET_MW_PROB_DIR`:
 
 ```bash
-bash scripts/export_3d_finetune_slices.sh size_gated      # → refinement_export/fold0_3d_size_gated/
-bash scripts/export_3d_finetune_slices.sh adaptive_large  # → refinement_export/fold0_3d_adaptive_large/
-bash scripts/export_3d_finetune_slices.sh all             # оба подряд
+bash scripts/cache_tumor_prob_maps.sh
+# или вручную: python3 scripts/cache_tumor_prob_for_multiwindow.py --model-dir <...__3d_fullres> --output-dir <cache> --fold 0 --split all
 ```
 
-Дальше: `EXPORT_DIR=.../fold0_3d_size_gated bash scripts/train_multiview.sh` (или
-`adaptive_large`). Вручную: `python3 scripts/export.py --output-dir ... --model-dir <путь_к_...__3d_fullres>`.
+Дальше 3D multi-window: `bash scripts/train_3d_multiwindow_refinement.sh --skip-preprocess` (см. `src/3d/multiwindow/README.md`). Для **2D** multiview / coarse_to_fine нужен слайсовый экспорт **`refinement_export/fold0`**: `EXPORT_DIR=.../fold0 bash scripts/train_multiview.sh`. Вручную: `python3 scripts/export.py --output-dir ... --model-dir <2d_или_3d_папка_nnUNet>`.
 
 Каталог с `train/*.npz` и `val/*.npz` может быть любым; классический экспорт лежит в
 **`refinement_export/fold0/`** (метаданные: `export_meta.json`). Обёртки `train_*.sh`
