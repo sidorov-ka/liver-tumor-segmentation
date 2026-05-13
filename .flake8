@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203
+exclude = .venv,.git,__pycache__,build,dist
+per-file-ignores =
+    scripts/2d/export.py:E402
+    scripts/visualization/plot_multiview_delta_vs_volume.py:E402
+    scripts/visualization/plot_val_delta_vs_gt_volume_from_preds.py:E402

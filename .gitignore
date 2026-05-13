@@ -1,0 +1,81 @@
+# Virtual env
+.venv/
+venv/
+env/
+.env
+# API-ключи и секреты не коммитить
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Data
+data/raw/
+data/interim/
+data/processed/
+!data/README.md
+
+# nnU-Net artifacts
+LiverTumor_backup/
+nnUNet_raw/*
+!nnUNet_raw/.gitkeep
+nnUNet_preprocessed/*
+!nnUNet_preprocessed/.gitkeep
+nnUNet_results/*
+!nnUNet_results/.gitkeep
+
+# coarse_to_fine stage-2 checkpoints / logs
+results_coarse_to_fine/*
+!results_coarse_to_fine/.gitkeep
+# legacy name (local only)
+coarse_to_fine_results/
+coarse_to_fine_export/
+
+# multiview / uncertainty stage-2 (nnUNet_results name unchanged)
+results_multiview/*
+!results_multiview/.gitkeep
+results_uncertainty/*
+!results_uncertainty/.gitkeep
+results_boundary_aware_coarse_to_fine/*
+!results_boundary_aware_coarse_to_fine/.gitkeep
+results_3d_default_finetune/*
+!results_3d_default_finetune/.gitkeep
+results_3d_boundary_shape_runs/*
+!results_3d_boundary_shape_runs/.gitkeep
+results_3d_multiwindow_runs/*
+!results_3d_multiwindow_runs/.gitkeep
+# legacy folder names (local only)
+multiview_results/
+uncertainty_results/
+
+# legacy names (optional local dirs)
+refinement_results/*
+refinement_export/
+
+# full inference comparison trees (large; regenerate from scripts)
+inference_comparison/
+
+# Medical imaging
+*.nii
+*.nii.gz
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Weights
+*.ckpt
+*.pth
+*.pt
