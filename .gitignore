@@ -49,6 +49,8 @@ results_3d_default_finetune/*
 !results_3d_default_finetune/.gitkeep
 results_3d_boundary_shape_runs/*
 !results_3d_boundary_shape_runs/.gitkeep
+results_3d_multiwindow_runs/*
+!results_3d_multiwindow_runs/.gitkeep
 # legacy folder names (local only)
 multiview_results/
 uncertainty_results/
