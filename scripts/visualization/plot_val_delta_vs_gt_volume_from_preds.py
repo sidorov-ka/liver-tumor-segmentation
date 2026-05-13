@@ -6,6 +6,8 @@ predictions under fold_0/validation and GT segmentations (no metrics JSON).
 Example:
   .venv/bin/python scripts/visualization/plot_val_delta_vs_gt_volume_from_preds.py \\
     --baseline-pred-dir results_3d_default_finetune/.../fold_0/validation \\
+    --baseline-label "3D nnUNet (baseline)" \\
+    --gt-dir nnUNet_raw/Dataset001_LiverTumor/labelsTr \\
     --model-pred-dir results_3d_boundary_shape_runs/20260509_131406_.../fold_0/validation \\
     --model-label "Adaptive large tumor" \\
     --output-png visualizations/delta_vs_vol_adaptive.png
@@ -16,7 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib
 
@@ -103,12 +105,19 @@ def collect_rows(
     return rows
 
 
-def _plot_one_ax(ax: Any, rows: List[Dict[str, Any]], model_label: str, baseline_label: str) -> None:
+def _plot_one_ax(
+    ax: Any,
+    rows: List[Dict[str, Any]],
+    model_label: str,
+    baseline_label: str,
+    *,
+    draw_spearman_on_ax: bool = True,
+) -> Optional[Tuple[float, float]]:
     from scipy.stats import spearmanr
 
     if not rows:
         ax.set_visible(False)
-        return
+        return None
     vols = np.array([r["gt_tumor_vol_mm3"] for r in rows], dtype=np.float64)
     deltas = np.array([r["delta_dice"] for r in rows], dtype=np.float64)
     spe = spearmanr(vols, deltas)
@@ -128,18 +137,20 @@ def _plot_one_ax(ax: Any, rows: List[Dict[str, Any]], model_label: str, baseline
     ax.set_xscale("log")
     ax.set_xlabel("GT tumor volume (mm³), log scale")
     ax.set_ylabel(f"ΔDice = {model_label} − {baseline_label}")
-    ax.set_title(f"{model_label} vs {baseline_label} (n={len(rows)})")
+    ax.set_title(f"{model_label} vs {baseline_label} by tumor size (n={len(rows)})")
     ax.grid(True, alpha=0.3)
-    ax.text(
-        0.99,
-        0.01,
-        f"Spearman ρ={spe.correlation:.2f}  p={spe.pvalue:.3f}",
-        transform=ax.transAxes,
-        ha="right",
-        va="bottom",
-        fontsize=9,
-        color="dimgray",
-    )
+    if draw_spearman_on_ax:
+        ax.text(
+            0.99,
+            0.01,
+            f"Spearman ρ={spe.correlation:.2f}  p={spe.pvalue:.3f}",
+            transform=ax.transAxes,
+            ha="right",
+            va="bottom",
+            fontsize=9,
+            color="dimgray",
+        )
+    return float(spe.correlation), float(spe.pvalue)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -186,6 +197,18 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         required=True,
     )
+    p.add_argument(
+        "--fig-width",
+        type=float,
+        default=10.0,
+        help="Figure width in inches (single panel). Multiple panels: width * n_panels.",
+    )
+    p.add_argument(
+        "--fig-height",
+        type=float,
+        default=6.0,
+        help="Figure height in inches (matches plot_multiview_delta_vs_volume default).",
+    )
     return p.parse_args()
 
 
@@ -200,15 +223,37 @@ def main() -> None:
     if len(labels) != len(model_dirs):
         raise SystemExit("Provide one --model-label per --model-pred-dir.")
     baseline_label = (args.baseline_label or "Baseline").strip()
+    n_p = len(model_dirs)
+    fw, fh = float(args.fig_width), float(args.fig_height)
+    figsize = (fw * n_p, fh)
 
-    fig, axes = plt.subplots(1, len(model_dirs), figsize=(6 * len(model_dirs), 6), squeeze=False)
+    fig, axes = plt.subplots(1, n_p, figsize=figsize, squeeze=False)
     axes_flat = axes[0]
+    last_spe: Optional[Tuple[float, float]] = None
+    multi = n_p > 1
     for ax, md, ml in zip(axes_flat, model_dirs, labels):
         rows = collect_rows(baseline_dir, md, gt_dir, args.tumor_label)
         print(f"{ml}: n={len(rows)} cases")
-        _plot_one_ax(ax, rows, ml, baseline_label)
+        last_spe = _plot_one_ax(
+            ax,
+            rows,
+            ml,
+            baseline_label,
+            draw_spearman_on_ax=multi,
+        )
 
     fig.tight_layout()
+
+    if not multi and last_spe is not None:
+        rho, pv = last_spe
+        fig.text(
+            0.99,
+            0.01,
+            f"Spearman ρ={rho:.2f}  p={pv:.3f}",
+            ha="right",
+            fontsize=9,
+            color="dimgray",
+        )
     out = Path(args.output_png)
     if not out.is_absolute():
         out = REPO_ROOT / out

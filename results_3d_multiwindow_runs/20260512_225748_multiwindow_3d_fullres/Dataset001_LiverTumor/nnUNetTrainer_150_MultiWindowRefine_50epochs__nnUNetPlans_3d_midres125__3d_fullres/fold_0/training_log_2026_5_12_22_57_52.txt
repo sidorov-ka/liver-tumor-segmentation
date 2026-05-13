@@ -1,0 +1,460 @@
+
+#######################################################################
+Please cite the following paper when using nnU-Net:
+Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods, 18(2), 203-211.
+#######################################################################
+ 
+2026-05-12 22:57:52.705174: MultiWindowRefine: batch_size 2 -> 1 (RAM; NNUNET_MW_MAX_BATCH_SIZE=0 to use full plan batch size) 
+2026-05-12 22:57:53.496548: do_dummy_2d_data_aug: False 
+2026-05-12 22:57:53.497210: Using splits from existing split file: /home/kasid/projects/liver-tumor-segmentation/nnUNet_preprocessed/Dataset001_LiverTumor/splits_final.json 
+2026-05-12 22:57:53.498213: The split file contains 5 splits. 
+2026-05-12 22:57:53.498281: Desired fold for training: 0 
+2026-05-12 22:57:53.498320: This split has 88 training and 23 validation cases. 
+
+This is the configuration used by this training:
+Configuration name: 3d_fullres
+ {'data_identifier': 'nnUNetPlans_3d_midres125_3d_fullres', 'preprocessor_name': 'DefaultPreprocessor', 'batch_size': 2, 'patch_size': [128, 128, 128], 'median_image_size_in_voxels': [379.0, 394.0, 394.0], 'spacing': [1.25, 1.0, 1.0], 'normalization_schemes': ['CTNormalization'], 'use_mask_for_norm': [False], 'resampling_fn_data': 'resample_data_or_seg_to_shape', 'resampling_fn_seg': 'resample_data_or_seg_to_shape', 'resampling_fn_data_kwargs': {'is_seg': False, 'order': 3, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_seg_kwargs': {'is_seg': True, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'resampling_fn_probabilities': 'resample_data_or_seg_to_shape', 'resampling_fn_probabilities_kwargs': {'is_seg': False, 'order': 1, 'order_z': 0, 'force_separate_z': None}, 'architecture': {'network_class_name': 'dynamic_network_architectures.architectures.unet.PlainConvUNet', 'arch_kwargs': {'n_stages': 6, 'features_per_stage': [32, 64, 128, 256, 320, 320], 'conv_op': 'torch.nn.modules.conv.Conv3d', 'kernel_sizes': [[3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3], [3, 3, 3]], 'strides': [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]], 'n_conv_per_stage': [2, 2, 2, 2, 2, 2], 'n_conv_per_stage_decoder': [2, 2, 2, 2, 2], 'conv_bias': True, 'norm_op': 'torch.nn.modules.instancenorm.InstanceNorm3d', 'norm_op_kwargs': {'eps': 1e-05, 'affine': True}, 'dropout_op': None, 'dropout_op_kwargs': None, 'nonlin': 'torch.nn.LeakyReLU', 'nonlin_kwargs': {'inplace': True}}, '_kw_requires_import': ['conv_op', 'norm_op', 'dropout_op', 'nonlin']}, 'batch_dice': True} 
+ 
+These are the global plan.json settings:
+ {'dataset_name': 'Dataset001_LiverTumor', 'plans_name': 'nnUNetPlans_3d_midres125', 'original_median_spacing_after_transp': [1.0, 0.76953125, 0.76953125], 'original_median_shape_after_transp': [343, 512, 512], 'image_reader_writer': 'SimpleITKIO', 'transpose_forward': [0, 1, 2], 'transpose_backward': [0, 1, 2], 'experiment_planner_used': 'ExperimentPlanner', 'label_manager': 'LabelManager', 'foreground_intensity_properties_per_channel': {'0': {'max': 5475.0, 'mean': 99.34821319580078, 'median': 100.0, 'min': -986.0, 'percentile_00_5': -17.0, 'percentile_99_5': 198.0, 'std': 37.449737548828125}}} 
+ 
+2026-05-12 22:57:57.464537: Unable to plot network architecture: 
+2026-05-12 22:57:57.464621: No module named 'hiddenlayer' 
+2026-05-12 22:57:57.474746: MultiWindowRefine: 4-channel input (tumor_prob + Lim HU windows [-1000,1000], [0,1000], [400,1000]), epochs=50, lr=0.001, batch_size=1, iter/epoch=100, val_iter/epoch=15, da_num_cached train/val=2/2, pin_memory=False, Tversky w=0.25 (alpha=0.3, beta=0.7), prob_dir=/home/kasid/projects/liver-tumor-segmentation/results_3d_multiwindow_runs/_prob_cache_fold0_size_gated 
+2026-05-12 22:57:57.475725:  
+2026-05-12 22:57:57.475801: Epoch 0 
+2026-05-12 22:57:57.475914: Current learning rate: 0.001 
+2026-05-12 23:00:15.429363: MultiWindowRefine loss: base=0.0236, tversky_tumor=1.0000, total=0.2736 
+2026-05-12 23:00:26.663947: train_loss 0.5537 
+2026-05-12 23:00:26.664145: val_loss 0.2695 
+2026-05-12 23:00:26.664218: Pseudo dice [np.float32(0.4667), np.float32(0.0004)] 
+2026-05-12 23:00:26.664380: Epoch time: 149.19 s 
+2026-05-12 23:00:26.664453: Yayy! New best EMA pseudo Dice: 0.23360000550746918 
+2026-05-12 23:00:27.418049:  
+2026-05-12 23:00:27.418226: Epoch 1 
+2026-05-12 23:00:27.418324: Current learning rate: 0.00098 
+2026-05-12 23:02:26.633287: MultiWindowRefine loss: base=0.0221, tversky_tumor=1.0000, total=0.2721 
+2026-05-12 23:02:37.426001: train_loss 0.2323 
+2026-05-12 23:02:37.426201: val_loss 0.1355 
+2026-05-12 23:02:37.426259: Pseudo dice [np.float32(0.8733), np.float32(0.7805)] 
+2026-05-12 23:02:37.426316: Epoch time: 130.01 s 
+2026-05-12 23:02:37.426464: Yayy! New best EMA pseudo Dice: 0.2928999960422516 
+2026-05-12 23:02:38.252901:  
+2026-05-12 23:02:38.253117: Epoch 2 
+2026-05-12 23:02:38.253211: Current learning rate: 0.00096 
+2026-05-12 23:04:45.117491: MultiWindowRefine loss: base=0.0022, tversky_tumor=1.0000, total=0.2522 
+2026-05-12 23:04:54.954314: train_loss 0.1666 
+2026-05-12 23:04:54.954467: val_loss 0.3413 
+2026-05-12 23:04:54.954571: Pseudo dice [np.float32(0.823), np.float32(0.0038)] 
+2026-05-12 23:04:54.954636: Epoch time: 136.7 s 
+2026-05-12 23:04:54.954700: Yayy! New best EMA pseudo Dice: 0.3050000071525574 
+2026-05-12 23:04:55.828797:  
+2026-05-12 23:04:55.829081: Epoch 3 
+2026-05-12 23:04:55.829201: Current learning rate: 0.00095 
+2026-05-12 23:07:00.857077: MultiWindowRefine loss: base=0.0081, tversky_tumor=1.0000, total=0.2581 
+2026-05-12 23:07:13.606327: train_loss 0.1519 
+2026-05-12 23:07:13.606514: val_loss 0.0289 
+2026-05-12 23:07:13.606580: Pseudo dice [np.float32(0.8222), np.float32(0.5962)] 
+2026-05-12 23:07:13.606654: Epoch time: 137.78 s 
+2026-05-12 23:07:13.606708: Yayy! New best EMA pseudo Dice: 0.34540000557899475 
+2026-05-12 23:07:14.490870:  
+2026-05-12 23:07:14.491138: Epoch 4 
+2026-05-12 23:07:14.491249: Current learning rate: 0.00093 
+2026-05-12 23:09:18.120312: MultiWindowRefine loss: base=0.0064, tversky_tumor=1.0000, total=0.2564 
+2026-05-12 23:09:32.124653: train_loss 0.0601 
+2026-05-12 23:09:32.124907: val_loss 0.1611 
+2026-05-12 23:09:32.124987: Pseudo dice [np.float32(0.8457), np.float32(0.2188)] 
+2026-05-12 23:09:32.125056: Epoch time: 137.63 s 
+2026-05-12 23:09:32.125105: Yayy! New best EMA pseudo Dice: 0.36410000920295715 
+2026-05-12 23:09:34.414671:  
+2026-05-12 23:09:34.414996: Epoch 5 
+2026-05-12 23:09:34.415215: Current learning rate: 0.00091 
+2026-05-12 23:11:40.457366: MultiWindowRefine loss: base=0.0019, tversky_tumor=1.0000, total=0.2519 
+2026-05-12 23:11:51.827065: train_loss 0.0821 
+2026-05-12 23:11:51.827373: val_loss 0.0618 
+2026-05-12 23:11:51.827627: Pseudo dice [np.float32(0.8818), np.float32(0.6945)] 
+2026-05-12 23:11:51.827688: Epoch time: 137.41 s 
+2026-05-12 23:11:51.827714: Yayy! New best EMA pseudo Dice: 0.4065000116825104 
+2026-05-12 23:11:52.698972:  
+2026-05-12 23:11:52.699121: Epoch 6 
+2026-05-12 23:11:52.699202: Current learning rate: 0.00089 
+2026-05-12 23:13:55.264744: MultiWindowRefine loss: base=0.0008, tversky_tumor=0.9999, total=0.2508 
+2026-05-12 23:14:06.668799: train_loss 0.0803 
+2026-05-12 23:14:06.669101: val_loss 0.0631 
+2026-05-12 23:14:06.669187: Pseudo dice [np.float32(0.81), np.float32(0.5952)] 
+2026-05-12 23:14:06.669247: Epoch time: 133.97 s 
+2026-05-12 23:14:06.669312: Yayy! New best EMA pseudo Dice: 0.4361000061035156 
+2026-05-12 23:14:07.519648:  
+2026-05-12 23:14:07.519892: Epoch 7 
+2026-05-12 23:14:07.520015: Current learning rate: 0.00087 
+2026-05-12 23:16:18.570127: MultiWindowRefine loss: base=-0.3453, tversky_tumor=1.0000, total=-0.0953 
+2026-05-12 23:16:32.217572: train_loss -0.015 
+2026-05-12 23:16:32.217740: val_loss 0.128 
+2026-05-12 23:16:32.217784: Pseudo dice [np.float32(0.82), np.float32(0.7514)] 
+2026-05-12 23:16:32.218020: Epoch time: 144.7 s 
+2026-05-12 23:16:32.218066: Yayy! New best EMA pseudo Dice: 0.47099998593330383 
+2026-05-12 23:16:33.115334:  
+2026-05-12 23:16:33.115603: Epoch 8 
+2026-05-12 23:16:33.115892: Current learning rate: 0.00085 
+2026-05-12 23:18:32.576245: MultiWindowRefine loss: base=-0.6411, tversky_tumor=0.3133, total=-0.5627 
+2026-05-12 23:18:42.616624: train_loss 0.0424 
+2026-05-12 23:18:42.616802: val_loss 0.119 
+2026-05-12 23:18:42.616866: Pseudo dice [np.float32(0.8553), np.float32(0.767)] 
+2026-05-12 23:18:42.616946: Epoch time: 129.5 s 
+2026-05-12 23:18:42.616999: Yayy! New best EMA pseudo Dice: 0.5051000118255615 
+2026-05-12 23:18:43.498836:  
+2026-05-12 23:18:43.498970: Epoch 9 
+2026-05-12 23:18:43.499066: Current learning rate: 0.00084 
+2026-05-12 23:20:46.242025: MultiWindowRefine loss: base=0.0559, tversky_tumor=0.9999, total=0.3058 
+2026-05-12 23:20:58.293934: train_loss 0.0717 
+2026-05-12 23:20:58.294124: val_loss 0.2638 
+2026-05-12 23:20:58.294276: Pseudo dice [np.float32(0.0), np.float32(nan)] 
+2026-05-12 23:20:58.294377: Epoch time: 134.8 s 
+2026-05-12 23:20:58.895192:  
+2026-05-12 23:20:58.895353: Epoch 10 
+2026-05-12 23:20:58.895444: Current learning rate: 0.00082 
+2026-05-12 23:23:00.516369: MultiWindowRefine loss: base=-0.1127, tversky_tumor=1.0000, total=0.1373 
+2026-05-12 23:23:12.073448: train_loss 0.0478 
+2026-05-12 23:23:12.073686: val_loss 0.0021 
+2026-05-12 23:23:12.073750: Pseudo dice [np.float32(0.92), np.float32(0.7749)] 
+2026-05-12 23:23:12.073798: Epoch time: 133.18 s 
+2026-05-12 23:23:12.769334:  
+2026-05-12 23:23:12.769515: Epoch 11 
+2026-05-12 23:23:12.769616: Current learning rate: 0.0008 
+2026-05-12 23:25:08.140837: MultiWindowRefine loss: base=0.0094, tversky_tumor=1.0000, total=0.2594 
+2026-05-12 23:25:19.026960: train_loss 0.0843 
+2026-05-12 23:25:19.027197: val_loss 0.1733 
+2026-05-12 23:25:19.027253: Pseudo dice [np.float32(0.8319), np.float32(0.4351)] 
+2026-05-12 23:25:19.027316: Epoch time: 126.26 s 
+2026-05-12 23:25:19.027365: Yayy! New best EMA pseudo Dice: 0.5077999830245972 
+2026-05-12 23:25:19.861845:  
+2026-05-12 23:25:19.862138: Epoch 12 
+2026-05-12 23:25:19.862263: Current learning rate: 0.00078 
+2026-05-12 23:27:25.413294: MultiWindowRefine loss: base=0.0010, tversky_tumor=0.9999, total=0.2510 
+2026-05-12 23:27:37.821995: train_loss 0.0178 
+2026-05-12 23:27:37.822299: val_loss 0.1798 
+2026-05-12 23:27:37.822381: Pseudo dice [np.float32(0.8668), np.float32(0.5759)] 
+2026-05-12 23:27:37.822506: Epoch time: 137.96 s 
+2026-05-12 23:27:37.822574: Yayy! New best EMA pseudo Dice: 0.52920001745224 
+2026-05-12 23:27:39.521547:  
+2026-05-12 23:27:39.521802: Epoch 13 
+2026-05-12 23:27:39.521941: Current learning rate: 0.00076 
+2026-05-12 23:29:40.725244: MultiWindowRefine loss: base=0.0012, tversky_tumor=0.9999, total=0.2512 
+2026-05-12 23:29:51.532701: train_loss 0.0311 
+2026-05-12 23:29:51.532910: val_loss 0.1696 
+2026-05-12 23:29:51.532968: Pseudo dice [np.float32(0.609), np.float32(0.4017)] 
+2026-05-12 23:29:51.533023: Epoch time: 132.01 s 
+2026-05-12 23:29:52.121021:  
+2026-05-12 23:29:52.121560: Epoch 14 
+2026-05-12 23:29:52.121740: Current learning rate: 0.00074 
+2026-05-12 23:31:53.937857: MultiWindowRefine loss: base=-0.0164, tversky_tumor=1.0000, total=0.2336 
+2026-05-12 23:32:04.939122: train_loss 0.0173 
+2026-05-12 23:32:04.939377: val_loss 0.1955 
+2026-05-12 23:32:04.939440: Pseudo dice [np.float32(0.5868), np.float32(0.5587)] 
+2026-05-12 23:32:04.939486: Epoch time: 132.82 s 
+2026-05-12 23:32:04.939511: Yayy! New best EMA pseudo Dice: 0.5314000248908997 
+2026-05-12 23:32:05.931384:  
+2026-05-12 23:32:05.931941: Epoch 15 
+2026-05-12 23:32:05.932148: Current learning rate: 0.00073 
+2026-05-12 23:34:19.922367: MultiWindowRefine loss: base=0.0310, tversky_tumor=1.0000, total=0.2809 
+2026-05-12 23:34:34.138152: train_loss 0.0606 
+2026-05-12 23:34:34.138345: val_loss 0.0553 
+2026-05-12 23:34:34.138409: Pseudo dice [np.float32(0.9214), np.float32(0.7843)] 
+2026-05-12 23:34:34.138474: Epoch time: 148.21 s 
+2026-05-12 23:34:34.138522: Yayy! New best EMA pseudo Dice: 0.5634999871253967 
+2026-05-12 23:34:35.154051:  
+2026-05-12 23:34:35.154198: Epoch 16 
+2026-05-12 23:34:35.154303: Current learning rate: 0.00071 
+2026-05-12 23:36:36.487256: MultiWindowRefine loss: base=-0.7640, tversky_tumor=0.2403, total=-0.7040 
+2026-05-12 23:36:49.547218: train_loss -0.0243 
+2026-05-12 23:36:49.547403: val_loss -0.0049 
+2026-05-12 23:36:49.547471: Pseudo dice [np.float32(0.9054), np.float32(0.7527)] 
+2026-05-12 23:36:49.547539: Epoch time: 134.39 s 
+2026-05-12 23:36:49.547588: Yayy! New best EMA pseudo Dice: 0.5900999903678894 
+2026-05-12 23:36:50.551354:  
+2026-05-12 23:36:50.551667: Epoch 17 
+2026-05-12 23:36:50.551785: Current learning rate: 0.00069 
+2026-05-12 23:38:53.485675: MultiWindowRefine loss: base=-0.8142, tversky_tumor=0.1473, total=-0.7774 
+2026-05-12 23:39:03.825131: train_loss 0.0247 
+2026-05-12 23:39:03.825289: val_loss -0.0272 
+2026-05-12 23:39:03.825358: Pseudo dice [np.float32(0.9164), np.float32(0.4565)] 
+2026-05-12 23:39:03.825409: Epoch time: 133.27 s 
+2026-05-12 23:39:03.825457: Yayy! New best EMA pseudo Dice: 0.5996999740600586 
+2026-05-12 23:39:04.731593:  
+2026-05-12 23:39:04.732197: Epoch 18 
+2026-05-12 23:39:04.732439: Current learning rate: 0.00067 
+2026-05-12 23:41:07.635504: MultiWindowRefine loss: base=0.0932, tversky_tumor=1.0000, total=0.3432 
+2026-05-12 23:42:25.519091: train_loss 0.003 
+2026-05-12 23:42:25.519274: val_loss -0.0146 
+2026-05-12 23:42:25.519341: Pseudo dice [np.float32(0.7114), np.float32(0.7019)] 
+2026-05-12 23:42:25.519407: Epoch time: 200.79 s 
+2026-05-12 23:42:25.519459: Yayy! New best EMA pseudo Dice: 0.6104000210762024 
+2026-05-12 23:41:20.954062:  
+2026-05-12 23:41:20.954306: Epoch 19 
+2026-05-12 23:41:20.954444: Current learning rate: 0.00065 
+2026-05-12 23:43:20.206879: MultiWindowRefine loss: base=-0.3964, tversky_tumor=1.0000, total=-0.1464 
+2026-05-12 23:43:32.175208: train_loss 0.0072 
+2026-05-12 23:43:32.175400: val_loss 0.1688 
+2026-05-12 23:43:32.175463: Pseudo dice [np.float32(0.7449), np.float32(0.044)] 
+2026-05-12 23:43:32.175509: Epoch time: 131.22 s 
+2026-05-12 23:43:32.802656:  
+2026-05-12 23:43:32.802843: Epoch 20 
+2026-05-12 23:43:32.802940: Current learning rate: 0.00063 
+2026-05-12 23:45:37.410484: MultiWindowRefine loss: base=0.0059, tversky_tumor=0.9999, total=0.2559 
+2026-05-12 23:45:50.165781: train_loss -0.0871 
+2026-05-12 23:45:50.165960: val_loss 0.1782 
+2026-05-12 23:45:50.166018: Pseudo dice [np.float32(0.8097), np.float32(0.0)] 
+2026-05-12 23:45:50.166063: Epoch time: 137.36 s 
+2026-05-12 23:45:50.807065:  
+2026-05-12 23:45:50.807204: Epoch 21 
+2026-05-12 23:45:50.807283: Current learning rate: 0.00061 
+2026-05-12 23:47:54.242541: MultiWindowRefine loss: base=0.0156, tversky_tumor=0.9999, total=0.2655 
+2026-05-12 23:48:05.041851: train_loss 0.0039 
+2026-05-12 23:48:05.042011: val_loss 0.1372 
+2026-05-12 23:48:05.042075: Pseudo dice [np.float32(0.9161), np.float32(0.8975)] 
+2026-05-12 23:48:05.042123: Epoch time: 134.24 s 
+2026-05-12 23:48:07.010999:  
+2026-05-12 23:48:07.011131: Epoch 22 
+2026-05-12 23:48:07.011260: Current learning rate: 0.00059 
+2026-05-12 23:50:10.630625: MultiWindowRefine loss: base=-0.6857, tversky_tumor=0.1849, total=-0.6395 
+2026-05-12 23:50:22.562535: train_loss -0.0409 
+2026-05-12 23:50:22.562712: val_loss 0.0752 
+2026-05-12 23:50:22.562773: Pseudo dice [np.float32(0.8873), np.float32(0.5716)] 
+2026-05-12 23:50:22.562822: Epoch time: 135.55 s 
+2026-05-12 23:50:22.562849: Yayy! New best EMA pseudo Dice: 0.616599977016449 
+2026-05-12 23:50:24.240521:  
+2026-05-12 23:50:24.240855: Epoch 23 
+2026-05-12 23:50:24.240949: Current learning rate: 0.00057 
+2026-05-12 23:52:23.841124: MultiWindowRefine loss: base=-0.4499, tversky_tumor=0.9998, total=-0.2000 
+2026-05-12 23:52:37.321400: train_loss -0.0114 
+2026-05-12 23:52:37.321835: val_loss 0.0153 
+2026-05-12 23:52:37.321914: Pseudo dice [np.float32(0.9276), np.float32(0.6154)] 
+2026-05-12 23:52:37.321959: Epoch time: 133.08 s 
+2026-05-12 23:52:37.321984: Yayy! New best EMA pseudo Dice: 0.632099986076355 
+2026-05-12 23:52:38.285001:  
+2026-05-12 23:52:38.285278: Epoch 24 
+2026-05-12 23:52:38.285397: Current learning rate: 0.00056 
+2026-05-12 23:54:39.866636: MultiWindowRefine loss: base=0.0027, tversky_tumor=0.9999, total=0.2527 
+2026-05-12 23:54:50.850179: train_loss 0.0237 
+2026-05-12 23:54:50.850377: val_loss 0.1744 
+2026-05-12 23:54:50.850600: Pseudo dice [np.float32(0.5145), np.float32(0.8791)] 
+2026-05-12 23:54:50.850648: Epoch time: 132.57 s 
+2026-05-12 23:54:50.850674: Yayy! New best EMA pseudo Dice: 0.6384999752044678 
+2026-05-12 23:54:51.762081:  
+2026-05-12 23:54:51.762470: Epoch 25 
+2026-05-12 23:54:51.762589: Current learning rate: 0.00054 
+2026-05-12 23:56:57.189202: MultiWindowRefine loss: base=0.0095, tversky_tumor=0.9999, total=0.2595 
+2026-05-12 23:57:08.050012: train_loss -0.008 
+2026-05-12 23:57:08.050154: val_loss 0.0846 
+2026-05-12 23:57:08.050195: Pseudo dice [np.float32(0.8285), np.float32(0.6225)] 
+2026-05-12 23:57:08.050249: Epoch time: 136.29 s 
+2026-05-12 23:57:08.050280: Yayy! New best EMA pseudo Dice: 0.6471999883651733 
+2026-05-12 23:57:08.971523:  
+2026-05-12 23:57:08.971853: Epoch 26 
+2026-05-12 23:57:08.971965: Current learning rate: 0.00052 
+2026-05-12 23:59:07.315462: MultiWindowRefine loss: base=0.0038, tversky_tumor=0.9998, total=0.2537 
+2026-05-12 23:59:20.512605: train_loss -0.0043 
+2026-05-12 23:59:20.513182: val_loss 0.033 
+2026-05-12 23:59:20.513265: Pseudo dice [np.float32(0.7215), np.float32(0.8945)] 
+2026-05-12 23:59:20.513317: Epoch time: 131.54 s 
+2026-05-12 23:59:20.513345: Yayy! New best EMA pseudo Dice: 0.6632999777793884 
+2026-05-12 23:59:21.387307:  
+2026-05-12 23:59:21.387577: Epoch 27 
+2026-05-12 23:59:21.387699: Current learning rate: 0.0005 
+2026-05-13 00:01:20.002024: MultiWindowRefine loss: base=0.2061, tversky_tumor=1.0000, total=0.4561 
+2026-05-13 00:01:35.084178: train_loss 0.0495 
+2026-05-13 00:01:35.084374: val_loss -0.0313 
+2026-05-13 00:01:35.084442: Pseudo dice [np.float32(0.9415), np.float32(0.8575)] 
+2026-05-13 00:01:35.084509: Epoch time: 133.7 s 
+2026-05-13 00:01:35.084617: Yayy! New best EMA pseudo Dice: 0.6869000196456909 
+2026-05-13 00:01:35.975235:  
+2026-05-13 00:01:35.975771: Epoch 28 
+2026-05-13 00:01:35.975966: Current learning rate: 0.00048 
+2026-05-13 00:03:37.013033: MultiWindowRefine loss: base=0.1420, tversky_tumor=0.9999, total=0.3920 
+2026-05-13 00:03:48.220215: train_loss -0.0145 
+2026-05-13 00:03:48.220389: val_loss 0.0496 
+2026-05-13 00:03:48.220454: Pseudo dice [np.float32(0.8601), np.float32(0.4121)] 
+2026-05-13 00:03:48.220517: Epoch time: 132.25 s 
+2026-05-13 00:03:48.852486:  
+2026-05-13 00:03:48.852641: Epoch 29 
+2026-05-13 00:03:48.852741: Current learning rate: 0.00046 
+2026-05-13 00:06:09.076789: MultiWindowRefine loss: base=0.0199, tversky_tumor=0.9998, total=0.2698 
+2026-05-13 00:06:23.742612: train_loss 0.0121 
+2026-05-13 00:06:23.742937: val_loss 0.1311 
+2026-05-13 00:06:23.743011: Pseudo dice [np.float32(0.6265), np.float32(0.881)] 
+2026-05-13 00:06:23.743090: Epoch time: 154.89 s 
+2026-05-13 00:06:23.743181: Yayy! New best EMA pseudo Dice: 0.6890000104904175 
+2026-05-13 00:06:27.678668:  
+2026-05-13 00:06:27.679083: Epoch 30 
+2026-05-13 00:06:27.679252: Current learning rate: 0.00044 
+2026-05-13 00:08:40.487608: MultiWindowRefine loss: base=0.0786, tversky_tumor=0.9999, total=0.3286 
+2026-05-13 00:08:54.316064: train_loss -0.0388 
+2026-05-13 00:08:54.316282: val_loss 0.2426 
+2026-05-13 00:08:54.316354: Pseudo dice [np.float32(0.1246), np.float32(0.0)] 
+2026-05-13 00:08:54.316430: Epoch time: 146.64 s 
+2026-05-13 00:08:55.040998:  
+2026-05-13 00:08:55.041333: Epoch 31 
+2026-05-13 00:08:55.041468: Current learning rate: 0.00042 
+2026-05-13 00:11:16.783977: MultiWindowRefine loss: base=0.0043, tversky_tumor=0.9999, total=0.2543 
+2026-05-13 00:11:30.680372: train_loss 0.0135 
+2026-05-13 00:11:30.680759: val_loss -0.0813 
+2026-05-13 00:11:30.680863: Pseudo dice [np.float32(0.9345), np.float32(0.7658)] 
+2026-05-13 00:11:30.680937: Epoch time: 155.64 s 
+2026-05-13 00:11:31.351937:  
+2026-05-13 00:11:31.352082: Epoch 32 
+2026-05-13 00:11:31.352168: Current learning rate: 0.0004 
+2026-05-13 00:13:38.089826: MultiWindowRefine loss: base=-0.7523, tversky_tumor=0.2073, total=-0.7005 
+2026-05-13 00:13:52.031299: train_loss -0.0056 
+2026-05-13 00:13:52.031475: val_loss 0.1101 
+2026-05-13 00:13:52.031537: Pseudo dice [np.float32(0.5459), np.float32(0.1951)] 
+2026-05-13 00:13:52.031611: Epoch time: 140.68 s 
+2026-05-13 00:13:52.703757:  
+2026-05-13 00:13:52.703991: Epoch 33 
+2026-05-13 00:13:52.704086: Current learning rate: 0.00038 
+2026-05-13 00:16:06.026312: MultiWindowRefine loss: base=0.0008, tversky_tumor=0.9999, total=0.2507 
+2026-05-13 00:16:19.904681: train_loss 0.0376 
+2026-05-13 00:16:19.904899: val_loss 0.019 
+2026-05-13 00:16:19.904967: Pseudo dice [np.float32(0.9215), np.float32(0.5774)] 
+2026-05-13 00:16:19.905031: Epoch time: 147.2 s 
+2026-05-13 00:16:20.622231:  
+2026-05-13 00:16:20.622679: Epoch 34 
+2026-05-13 00:16:20.622800: Current learning rate: 0.00036 
+2026-05-13 00:18:39.581146: MultiWindowRefine loss: base=0.0004, tversky_tumor=0.9998, total=0.2503 
+2026-05-13 00:18:54.852587: train_loss 0.0085 
+2026-05-13 00:18:54.852819: val_loss 0.0502 
+2026-05-13 00:18:54.852920: Pseudo dice [np.float32(0.8638), np.float32(0.8783)] 
+2026-05-13 00:18:54.852999: Epoch time: 154.23 s 
+2026-05-13 00:18:55.595620:  
+2026-05-13 00:18:55.596004: Epoch 35 
+2026-05-13 00:18:55.596174: Current learning rate: 0.00034 
+2026-05-13 00:21:23.243748: MultiWindowRefine loss: base=0.0004, tversky_tumor=0.9998, total=0.2504 
+2026-05-13 00:21:40.429463: train_loss 0.0216 
+2026-05-13 00:21:40.430013: val_loss 0.0905 
+2026-05-13 00:21:40.430134: Pseudo dice [np.float32(0.8303), np.float32(0.3145)] 
+2026-05-13 00:21:40.430303: Epoch time: 164.83 s 
+2026-05-13 00:21:41.202460:  
+2026-05-13 00:21:41.203085: Epoch 36 
+2026-05-13 00:21:41.203250: Current learning rate: 0.00032 
+2026-05-13 00:23:54.809082: MultiWindowRefine loss: base=-0.2450, tversky_tumor=1.0000, total=0.0050 
+2026-05-13 00:24:06.184786: train_loss -0.0572 
+2026-05-13 00:24:06.185049: val_loss -0.0871 
+2026-05-13 00:24:06.185110: Pseudo dice [np.float32(0.9099), np.float32(0.6599)] 
+2026-05-13 00:24:06.185196: Epoch time: 144.98 s 
+2026-05-13 00:24:06.894263:  
+2026-05-13 00:24:06.894788: Epoch 37 
+2026-05-13 00:24:06.894968: Current learning rate: 0.0003 
+2026-05-13 00:27:18.214654: MultiWindowRefine loss: base=0.0015, tversky_tumor=0.9999, total=0.2515 
+2026-05-13 00:27:32.026092: train_loss -0.0028 
+2026-05-13 00:27:32.026292: val_loss 0.0774 
+2026-05-13 00:27:32.026350: Pseudo dice [np.float32(0.7694), np.float32(0.5807)] 
+2026-05-13 00:27:32.026410: Epoch time: 205.13 s 
+2026-05-13 00:27:34.302467:  
+2026-05-13 00:27:34.302677: Epoch 38 
+2026-05-13 00:27:34.302800: Current learning rate: 0.00028 
+2026-05-13 00:28:30.620110: MultiWindowRefine loss: base=0.0032, tversky_tumor=0.9999, total=0.2532 
+2026-05-13 00:28:44.062062: train_loss 0.0161 
+2026-05-13 00:28:44.062278: val_loss 0.1478 
+2026-05-13 00:28:44.062337: Pseudo dice [np.float32(0.7501), np.float32(0.0)] 
+2026-05-13 00:28:44.062395: Epoch time: 69.76 s 
+2026-05-13 00:28:44.732199:  
+2026-05-13 00:28:44.732350: Epoch 39 
+2026-05-13 00:28:44.732452: Current learning rate: 0.00026 
+2026-05-13 00:30:49.413021: MultiWindowRefine loss: base=0.0011, tversky_tumor=0.9999, total=0.2511 
+2026-05-13 00:31:02.496120: train_loss 0.0124 
+2026-05-13 00:31:02.496291: val_loss 0.1312 
+2026-05-13 00:31:02.496359: Pseudo dice [np.float32(0.7613), np.float32(0.8838)] 
+2026-05-13 00:31:02.496423: Epoch time: 137.76 s 
+2026-05-13 00:31:03.198851:  
+2026-05-13 00:31:03.199082: Epoch 40 
+2026-05-13 00:31:03.199196: Current learning rate: 0.00023 
+2026-05-13 00:34:12.454065: MultiWindowRefine loss: base=-0.2666, tversky_tumor=0.9999, total=-0.0167 
+2026-05-13 00:34:22.573387: train_loss -0.0464 
+2026-05-13 00:34:22.573549: val_loss 0.0057 
+2026-05-13 00:34:22.573619: Pseudo dice [np.float32(0.9319), np.float32(0.4904)] 
+2026-05-13 00:34:22.573667: Epoch time: 199.38 s 
+2026-05-13 00:34:23.225333:  
+2026-05-13 00:34:23.225466: Epoch 41 
+2026-05-13 00:34:23.225542: Current learning rate: 0.00021 
+2026-05-13 00:35:12.375489: MultiWindowRefine loss: base=-0.6760, tversky_tumor=0.2422, total=-0.6154 
+2026-05-13 00:35:23.457905: train_loss 0.0414 
+2026-05-13 00:35:23.458060: val_loss 0.088 
+2026-05-13 00:35:23.458174: Pseudo dice [np.float32(0.9011), np.float32(0.624)] 
+2026-05-13 00:35:23.458280: Epoch time: 60.23 s 
+2026-05-13 00:35:24.110960:  
+2026-05-13 00:35:24.111280: Epoch 42 
+2026-05-13 00:35:24.111643: Current learning rate: 0.00019 
+2026-05-13 00:37:26.918034: MultiWindowRefine loss: base=-0.7471, tversky_tumor=0.0913, total=-0.7243 
+2026-05-13 00:37:39.434260: train_loss 0.0543 
+2026-05-13 00:37:39.434430: val_loss 0.0547 
+2026-05-13 00:37:39.434554: Pseudo dice [np.float32(0.9355), np.float32(0.8304)] 
+2026-05-13 00:37:39.434630: Epoch time: 135.32 s 
+2026-05-13 00:37:39.434678: Yayy! New best EMA pseudo Dice: 0.691100001335144 
+2026-05-13 00:37:40.919158:  
+2026-05-13 00:37:40.919494: Epoch 43 
+2026-05-13 00:37:40.919625: Current learning rate: 0.00017 
+2026-05-13 00:39:34.619933: MultiWindowRefine loss: base=-0.2122, tversky_tumor=1.0000, total=0.0378 
+2026-05-13 00:39:45.484168: train_loss -0.0398 
+2026-05-13 00:39:45.484360: val_loss 0.0836 
+2026-05-13 00:39:45.484429: Pseudo dice [np.float32(0.8894), np.float32(0.7956)] 
+2026-05-13 00:39:45.484495: Epoch time: 124.57 s 
+2026-05-13 00:39:45.484545: Yayy! New best EMA pseudo Dice: 0.7062000036239624 
+2026-05-13 00:39:46.435762:  
+2026-05-13 00:39:46.436131: Epoch 44 
+2026-05-13 00:39:46.436289: Current learning rate: 0.00015 
+2026-05-13 00:41:42.580179: MultiWindowRefine loss: base=-0.4240, tversky_tumor=1.0000, total=-0.1740 
+2026-05-13 00:41:53.698406: train_loss -0.0258 
+2026-05-13 00:41:53.698860: val_loss 0.0921 
+2026-05-13 00:41:53.698929: Pseudo dice [np.float32(0.848), np.float32(0.825)] 
+2026-05-13 00:41:53.698990: Epoch time: 127.26 s 
+2026-05-13 00:41:53.699036: Yayy! New best EMA pseudo Dice: 0.7192999720573425 
+2026-05-13 00:41:54.646950:  
+2026-05-13 00:41:54.647241: Epoch 45 
+2026-05-13 00:41:54.647381: Current learning rate: 0.00013 
+2026-05-13 00:43:52.326635: MultiWindowRefine loss: base=-0.4395, tversky_tumor=1.0000, total=-0.1895 
+2026-05-13 00:44:02.158908: train_loss -0.0097 
+2026-05-13 00:44:02.159072: val_loss -0.0002 
+2026-05-13 00:44:02.159444: Pseudo dice [np.float32(0.9211), np.float32(0.6904)] 
+2026-05-13 00:44:02.159525: Epoch time: 127.51 s 
+2026-05-13 00:44:02.159554: Yayy! New best EMA pseudo Dice: 0.7279000282287598 
+2026-05-13 00:44:04.333628:  
+2026-05-13 00:44:04.334143: Epoch 46 
+2026-05-13 00:44:04.334303: Current learning rate: 0.0001 
+2026-05-13 00:46:05.519511: MultiWindowRefine loss: base=0.0094, tversky_tumor=1.0000, total=0.2594 
+2026-05-13 00:46:15.508062: train_loss -0.0503 
+2026-05-13 00:46:15.508258: val_loss -0.1168 
+2026-05-13 00:46:15.508518: Pseudo dice [np.float32(0.8744), np.float32(0.7204)] 
+2026-05-13 00:46:15.508655: Epoch time: 131.18 s 
+2026-05-13 00:46:15.508719: Yayy! New best EMA pseudo Dice: 0.7348999977111816 
+2026-05-13 00:46:16.420067:  
+2026-05-13 00:46:16.420775: Epoch 47 
+2026-05-13 00:46:16.420987: Current learning rate: 8e-05 
+2026-05-13 00:48:18.660968: MultiWindowRefine loss: base=0.0406, tversky_tumor=0.9998, total=0.2905 
+2026-05-13 00:48:31.219676: train_loss -0.074 
+2026-05-13 00:48:31.219875: val_loss 0.0144 
+2026-05-13 00:48:31.219997: Pseudo dice [np.float32(0.87), np.float32(0.7966)] 
+2026-05-13 00:48:31.220084: Epoch time: 134.8 s 
+2026-05-13 00:48:31.220132: Yayy! New best EMA pseudo Dice: 0.744700014591217 
+2026-05-13 00:48:32.158688:  
+2026-05-13 00:48:32.158980: Epoch 48 
+2026-05-13 00:48:32.159122: Current learning rate: 6e-05 
+2026-05-13 00:50:35.097903: MultiWindowRefine loss: base=0.0006, tversky_tumor=1.0000, total=0.2506 
+2026-05-13 00:50:47.400220: train_loss -0.013 
+2026-05-13 00:50:47.400448: val_loss -0.0041 
+2026-05-13 00:50:47.400512: Pseudo dice [np.float32(0.9384), np.float32(0.6185)] 
+2026-05-13 00:50:47.400558: Epoch time: 135.24 s 
+2026-05-13 00:50:47.400601: Yayy! New best EMA pseudo Dice: 0.7480999827384949 
+2026-05-13 00:50:48.362308:  
+2026-05-13 00:50:48.362449: Epoch 49 
+2026-05-13 00:50:48.362546: Current learning rate: 3e-05 
+2026-05-13 00:52:50.843147: MultiWindowRefine loss: base=0.0013, tversky_tumor=0.9999, total=0.2513 
+2026-05-13 00:53:02.366345: train_loss 0.011 
+2026-05-13 00:53:02.366523: val_loss 0.0897 
+2026-05-13 00:53:02.366619: Pseudo dice [np.float32(0.7914), np.float32(0.6852)] 
+2026-05-13 00:53:02.366677: Epoch time: 134.0 s 
+2026-05-13 00:53:03.404094: Training done. 
+2026-05-13 00:53:03.800462: Using splits from existing split file: /home/kasid/projects/liver-tumor-segmentation/nnUNet_preprocessed/Dataset001_LiverTumor/splits_final.json 
+2026-05-13 00:53:03.806626: The split file contains 5 splits. 
+2026-05-13 00:53:03.806752: Desired fold for training: 0 
+2026-05-13 00:53:03.806837: This split has 88 training and 23 validation cases. 
+2026-05-13 00:53:03.807176: predicting case_0000 
+2026-05-13 00:53:03.945855: case_0000, shape torch.Size([1, 300, 360, 360]), rank 0 
