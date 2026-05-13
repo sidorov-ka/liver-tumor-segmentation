@@ -39,7 +39,7 @@ class MultiWindowRefinementDataLoader(nnUNetDataLoader):
         if not self.prob_dir or not os.path.isdir(self.prob_dir):
             raise FileNotFoundError(
                 f"MultiWindowRefinementDataLoader: prob_dir missing or not a directory: {self.prob_dir!r}. "
-                "Run scripts/cache_tumor_prob_for_multiwindow.py first."
+                "Run scripts/3d/cache_tumor_prob_for_multiwindow.py first."
             )
         if not fingerprint_json or not os.path.isfile(fingerprint_json):
             raise FileNotFoundError(
@@ -80,7 +80,8 @@ class MultiWindowRefinementDataLoader(nnUNetDataLoader):
             bbox_lbs, bbox_ubs = self.get_bbox(shape, force_fg, properties["class_locations"])
             bbox = [[a, b] for a, b in zip(bbox_lbs, bbox_ubs)]
 
-            norm_crop = crop_and_pad_nd(np.asarray(data, dtype=np.float32), bbox, 0)
+            data_f32 = np.asarray(data, dtype=np.float32)
+            norm_crop = crop_and_pad_nd(data_f32, bbox, 0)
             prob_path = join(self.prob_dir, f"{i}.npz")
             if not os.path.isfile(prob_path):
                 raise FileNotFoundError(f"Missing tumor prob cache for case {i}: {prob_path}")
@@ -88,12 +89,14 @@ class MultiWindowRefinementDataLoader(nnUNetDataLoader):
             prob = np.asarray(prob_raw["prob"], dtype=np.float32)
             if prob.ndim == 3:
                 prob = prob[np.newaxis, ...]
-            if prob.shape != norm_crop.shape:
+            # Cached prob is full preprocessed volume; norm_crop is a patch — compare to data_f32.
+            if prob.shape != data_f32.shape:
                 raise ValueError(
-                    f"Prob shape {prob.shape} != image shape {norm_crop.shape} for case {i}. "
+                    f"Prob shape {prob.shape} != full image shape {data_f32.shape} for case {i}. "
                     "Re-run cache script with the same preprocessed configuration."
                 )
             prob_crop = crop_and_pad_nd(prob, bbox, 0.0)
+            del prob
             hw = lim_three_windows_from_norm(np.asarray(norm_crop[0], dtype=np.float32), self.fp_stats)
             merged = np.concatenate([prob_crop, hw], axis=0).astype(np.float32)
             data_all[j] = merged

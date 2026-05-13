@@ -1,6 +1,6 @@
 """NPZ dataset for coarse_to_fine (exported slices).
 
-Training aligned with inference (scripts/infer_coarse_to_fine.py _refine_roi_slices):
+Training aligned with inference (scripts/2d/infer_coarse_to_fine.py _refine_roi_slices):
   - Second channel: nnU-Net tumor **probability** (softmax), matching Universal Topology
     Refinement-style refinement of probability maps (Li et al., arXiv:2409.09796). We use real
     nnU-Net probs + 2D ROI crops; full polynomial synthesis from the paper is not implemented.
@@ -70,7 +70,7 @@ def _resize_pair_prob(
 
 class RefinementSliceDataset(Dataset):
     """
-    Reads .npz files produced by scripts/export.py.
+    Reads .npz files produced by scripts/2d/export.py.
 
     Each sample:
       input: (C, H, W) — image + coarse (prob or binary)

@@ -1,4 +1,4 @@
-"""NPZ dataset for multiview training (same export as coarse_to_fine: scripts/export.py).
+"""NPZ dataset for multiview training (same export as coarse_to_fine: scripts/2d/export.py).
 
 Default ``roi_mode="infer"`` matches ``infer_multiview`` / ``pipeline.refine_tumor_probability_volume``
 on a single axial slice:

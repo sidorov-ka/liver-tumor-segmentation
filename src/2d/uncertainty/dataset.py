@@ -1,4 +1,4 @@
-"""NPZ dataset for uncertainty-guided training (export: scripts/export.py).
+"""NPZ dataset for uncertainty-guided training (export: scripts/2d/export.py).
 
 ``roi_mode=\"infer\"`` matches ``infer_uncertainty`` / ``pipeline.refine_tumor_probability_volume``:
 

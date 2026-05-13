@@ -60,7 +60,7 @@ def prepare_input_tensor_5ch(
 
 class BoundaryAwareRefinementSliceDataset(Dataset):
     """
-    Reads .npz files produced by scripts/export.py (same as coarse_to_fine).
+    Reads .npz files produced by scripts/2d/export.py (same as coarse_to_fine).
 
     Each sample:
       input: (5, H, W) — three HU-window channels + coarse tumor probability + normalized entropy

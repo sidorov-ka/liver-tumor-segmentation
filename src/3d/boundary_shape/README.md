@@ -83,7 +83,7 @@ Presets:
 - `presets/adaptive_large_tumor_2026_05_09.env`: aggressive adaptive-large-tumor run.
 - `presets/tversky_guard_2026_05_04.env`: saved-good Tversky run.
 
-Training is launched via `scripts/train_3d_boundary_shape.sh`, which forwards
+Training is launched via `scripts/3d/train_3d_boundary_shape.sh`, which forwards
 `--val_best` to nnU-Net by default so `fold_*/validation/` uses
 `checkpoint_best.pth`. Set `NNUNET_VALIDATION_WITH_BEST=0` for final-epoch
 validation.

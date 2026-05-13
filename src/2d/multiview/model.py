@@ -6,7 +6,7 @@ plus the **nnU-Net tumor probability** as an extra channel, fused in a single en
 (see e.g. *Deep Multi-View Fusion Network for Lung Nodule Segmentation*, IEEE TMI / similar;
 multi-window CT inputs for nodule segmentation).
 
-Train with ``scripts/train_multiview.py``; **do not** load weights from
+Train with ``scripts/2d/train_multiview.py``; **do not** load weights from
 ``train_coarse_to_fine`` / TinyUNet2d(2-channel).
 """
 
