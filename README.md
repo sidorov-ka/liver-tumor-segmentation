@@ -145,6 +145,10 @@ liver-tumor-segmentation/
 └── nnUNet_* / results_*     # local; see .gitignore
 ```
 
+## Git push (Cursor / WSL)
+
+If `git push` fails with `vscode-git-…sock` / `ECONNREFUSED`, the repo sets **`git.terminalAuthentication: false`** in `.vscode/settings.json` so the integrated terminal does not use the broken VS Code credential socket. Reload the window, then authenticate once: create a [GitHub PAT](https://github.com/settings/tokens) and run `git push` (username = GitHub login, password = token), or save `https://<USER>:<TOKEN>@github.com` in `~/.git-credentials` and use `git config --global credential.helper store`.
+
 ## License
 
 See `LICENSE`.

@@ -1,6 +1,7 @@
 {
   "git.autoRepositoryDetection": true,
   "git.openRepositoryInParentFolders": "always",
+  "git.terminalAuthentication": false,
   "files.watcherExclude": {
     "**/nnUNet_preprocessed/**": true,
     "**/nnUNet_raw/**": true,
