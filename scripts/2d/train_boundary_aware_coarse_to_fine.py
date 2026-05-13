@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Train boundary_aware_coarse_to_fine (stage-2) on export.py .npz: 3 HU windows + coarse prob + entropy; ROI as coarse_to_fine.
+"""Train boundary_aware coarse-to-fine (stage 2) on export.py .npz slices.
 
-Writes under ``results_boundary_aware_coarse_to_fine/``: checkpoints, ``training_log_*.txt``,
-``validation/summary.json``, and by default TensorBoard scalars under ``<out_dir>/tensorboard``.
+Five inputs: three HU windows, coarse tumor probability, entropy. ROI matches coarse_to_fine.
+Writes under ``results_boundary_aware_coarse_to_fine/`` (checkpoints, logs, validation summary,
+TensorBoard by default).
 """
 
 from __future__ import annotations
@@ -37,7 +38,10 @@ from boundary_aware_coarse_to_fine.trainer import (  # noqa: E402
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Train boundary_aware_coarse_to_fine (5-channel: 3 HU windows + coarse prob + entropy) on ROI-exported slices."
+        description=(
+            "Train boundary_aware_coarse_to_fine (5 ch: 3 HU + coarse prob + entropy) "
+            "on ROI-exported slices."
+        ),
     )
     p.add_argument(
         "--export-dir",

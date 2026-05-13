@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import os
-from typing import Union
-
 import numpy as np
 import torch
 from batchgenerators.utilities.file_and_folder_operations import join

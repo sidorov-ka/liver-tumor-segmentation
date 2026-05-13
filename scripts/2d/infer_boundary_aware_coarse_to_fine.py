@@ -2,10 +2,12 @@
 """
 Two-stage full-volume inference: nnU-Net (stage 1) + boundary_aware_coarse_to_fine refiner (stage 2).
 
-Same stage-1 stack as ``infer_coarse_to_fine.py`` (``nnUNetPredictor`` + preprocessor). Optionally **before** stage 2, entire 3D tumor connected components can be removed: **dominant** check is
-mean intensity in the **first HU window** (same as training ch0) on preprocessed CT — if outside
-``[hu_narrow_mean_min, hu_narrow_mean_max]`` in [0,1] window space, the CC is removed regardless of nnU-Net
-softmax. Optional tiny-CC and mean-softmax rules are secondary (``fp_component_removal`` in ``meta.json``).
+Same stage-1 stack as ``infer_coarse_to_fine.py`` (``nnUNetPredictor`` + preprocessor).
+Optionally **before** stage 2, entire 3D tumor connected components can be removed:
+the main check is mean intensity in the **first HU window** (training ch0) on
+preprocessed CT. If outside ``[hu_narrow_mean_min, hu_narrow_mean_max]`` in
+[0,1] window space, the CC is removed regardless of nnU-Net softmax. Optional
+tiny-CC and mean-softmax rules use ``fp_component_removal`` in ``meta.json``.
 
 Stage 2 uses a 5-channel network (three HU windows + coarse tumor probability + Bernoulli entropy) and applies
 refined predictions **only inside a morphological boundary ring** around the coarse tumor mask; inside the
@@ -55,7 +57,7 @@ from boundary_aware_coarse_to_fine.utils import (  # noqa: E402
 )
 
 DEFAULT_INFERENCE_SUBDIR = "two_stage"
-# Experiment roots under inference_comparison/: baseline (nnU-Net only), coarse_to_fine (two-stage), multiview (scripts/2d/infer_multiview.py).
+# inference_comparison/: baseline, coarse_to_fine, boundary_aware, multiview.
 DEFAULT_OUTPUT_ROOT_BASELINE = "inference_comparison/baseline"
 DEFAULT_OUTPUT_ROOT_BOUNDARY_AWARE_COARSE_TO_FINE = "inference_comparison/boundary_aware_coarse_to_fine"
 DEFAULT_DATASET_FOLDER = "Dataset001_LiverTumor"
@@ -138,8 +140,10 @@ def _parse_args() -> argparse.Namespace:
         "--output",
         type=str,
         default=None,
-        help="Output folder for final segmentations (per-case subfolders). If omitted, defaults under "
-        f"--output-root (see --stage1-only / two-stage layout).",
+        help=(
+            "Output folder for final segmentations (per-case subfolders). If omitted, defaults under "
+            "--output-root (see --stage1-only / two-stage layout)."
+        ),
     )
     p.add_argument(
         "--output-root",
@@ -206,7 +210,10 @@ def _parse_args() -> argparse.Namespace:
         "--exclude-cases",
         type=str,
         default="",
-        help="Comma-separated case_ids to skip in addition to heavy cases (when skip-heavy-val is on).",
+        help=(
+            "Comma-separated case_ids to skip in addition to heavy cases "
+            "(when skip-heavy-val is on)."
+        ),
     )
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
     p.add_argument(
@@ -214,7 +221,10 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         dest="boundary_aware_dir",
-        help="boundary_aware_coarse_to_fine run dir with checkpoint_best.pth and meta.json. Not used with --stage1-only.",
+        help=(
+            "boundary_aware_coarse_to_fine run dir with checkpoint_best.pth and meta.json. "
+            "Not used with --stage1-only."
+        ),
     )
     p.add_argument(
         "--stage1-only",

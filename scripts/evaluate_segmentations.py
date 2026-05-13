@@ -2,15 +2,15 @@
 """
 Volumetric Dice / IoU for tumor vs nnU-Net-style reference labels.
 
-Expects predictions from ``infer_coarse_to_fine.py`` or ``infer_multiview.py`` (flat ``<pred_dir>/<case_id>.nii.gz``) and GT in
-``<gt_dir>/<case_id>.nii.gz`` (e.g. ``labelsTr``). Same spacing/shape as usual after nnU-Net export.
+Expects flat ``<pred_dir>/<case_id>.nii.gz`` (e.g. from ``infer_coarse_to_fine.py`` or
+``infer_multiview.py``) and GT ``<gt_dir>/<case_id>.nii.gz`` (e.g. ``labelsTr``).
+Same spacing/shape as after nnU-Net export.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 

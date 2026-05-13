@@ -6,7 +6,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -23,9 +23,6 @@ from boundary_aware_coarse_to_fine.utils import (
 )
 
 LABEL_TUMOR = "2"
-
-if TYPE_CHECKING:
-    from torch.utils.tensorboard import SummaryWriter
 
 
 def boundary_aware_collate_fn(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -200,7 +197,7 @@ def run_training(
         args_path.write_text(json.dumps(training_args, indent=2), encoding="utf-8")
         log(f"Wrote training_args.json to {args_path}", also_print=False)
 
-    tb_writer: Optional["SummaryWriter"] = None
+    tb_writer: Any = None
     if tensorboard_dir is not None:
         try:
             from torch.utils.tensorboard import SummaryWriter
@@ -312,7 +309,7 @@ def run_training(
                     encoding="utf-8",
                 )
                 log(
-                    f"Yayy! New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}",
+                    f"New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}",
                     also_print=True,
                 )
             if tb_writer is not None:

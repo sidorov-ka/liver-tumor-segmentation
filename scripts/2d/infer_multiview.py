@@ -10,8 +10,8 @@ produced by ``scripts/2d/train_multiview.py`` (``results_multiview/.../multiview
 Runs the same nnU-Net forward on preprocessed data as scripts/2d/infer_coarse_to_fine.py (aligned shapes), then
 updates the tumor-class probability channel inside suspicious ROIs (replace or blend with nnU-Net prob;
 see ``MultiviewConfig``); outside ROIs the tumor channel stays the nnU-Net softmax. Writes only under ``-o``.
-By default ``case_0004`` and ``case_0018`` are skipped (very large volumes); use ``--no-skip-heavy-val`` to include them.
-``--exclude-cases`` adds more IDs to skip.
+By default ``case_0004`` and ``case_0018`` are skipped (very large volumes);
+use ``--no-skip-heavy-val`` to include them. ``--exclude-cases`` adds more IDs to skip.
 """
 
 from __future__ import annotations

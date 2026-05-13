@@ -33,7 +33,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import numpy as np
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -103,7 +102,10 @@ def _default_eval_gt_dir(repo: Path, dataset_folder: str, pre_root: Path) -> Pat
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export nnU-Net 2d validation segmentations (same predictor stack as infer_coarse_to_fine --stage1-only).",
+        description=(
+            "Export nnU-Net 2d validation segmentations "
+            "(same predictor stack as infer_coarse_to_fine --stage1-only)."
+        ),
     )
     p.add_argument(
         "-i",
@@ -137,7 +139,10 @@ def _parse_args() -> argparse.Namespace:
         "--nnunet-preprocessed",
         type=str,
         default=None,
-        help="Root with <dataset-folder>/splits_final.json (default: $nnUNet_preprocessed or repo/nnUNet_preprocessed).",
+        help=(
+            "Root with <dataset-folder>/splits_final.json "
+            "(default: $nnUNet_preprocessed or repo/nnUNet_preprocessed)."
+        ),
     )
     p.add_argument(
         "--dataset-folder",

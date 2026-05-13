@@ -211,7 +211,7 @@ def run_training(
                 json.dumps(best_summary, indent=2),
                 encoding="utf-8",
             )
-            log(f"Yayy! New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}", also_print=True)
+            log(f"New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}", also_print=True)
         log("", also_print=False)
 
     log("Training done.", also_print=True)

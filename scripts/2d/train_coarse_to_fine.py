@@ -64,12 +64,18 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--no-coarse-prob",
         action="store_true",
-        help="Use binary coarse_tumor mask as 2nd channel. Default: coarse_tumor_prob (softmax), aligned with infer_coarse_to_fine.",
+        help=(
+            "Binary coarse_tumor mask as 2nd channel. Default: coarse_tumor_prob (softmax), "
+            "aligned with infer_coarse_to_fine."
+        ),
     )
     p.add_argument(
         "--no-roi-align",
         action="store_true",
-        help="Legacy: resize the full slice to crop_size. Default: ROI crop around GT∪coarse then resize (aligned with infer_coarse_to_fine bbox crops).",
+        help=(
+            "Legacy: resize the full slice to crop_size. Default: ROI crop around GT∪coarse "
+            "then resize (aligned with infer_coarse_to_fine bbox crops)."
+        ),
     )
     p.add_argument(
         "--roi-pad",
@@ -184,13 +190,19 @@ def main() -> None:
         "in_channels": in_channels,
         "dataset_folder": args.dataset_folder,
         "fold": args.fold,
-        "run_layout": f"{DEFAULT_COARSE_TO_FINE_RESULTS_ROOT}/<dataset>/fold_<n>/{COARSE_TO_FINE_TASK_DIR}/run_<timestamp>",
+        "run_layout": (
+            f"{DEFAULT_COARSE_TO_FINE_RESULTS_ROOT}/<dataset>/fold_<n>/"
+            f"{COARSE_TO_FINE_TASK_DIR}/run_<timestamp>"
+        ),
         "crop_size": list(crop_size),
         "use_coarse_prob": use_coarse_prob,
         "roi_aligned": roi_aligned,
         "roi_pad_xy": list(roi_pad_xy),
         "min_roi_xy": list(min_roi_xy),
-        "reference": "UTR-style: prob refinement + ROI crop; Li et al. arXiv:2409.09796 (polynomial synthesis not implemented)",
+        "reference": (
+            "UTR-style prob refinement + ROI crop; Li et al. arXiv:2409.09796 "
+            "(polynomial synthesis not implemented)"
+        ),
         "export_dir": str(export_dir.resolve()),
         "best_checkpoint": str(best.resolve()),
         "validation_summary": str((out_dir / "validation" / "summary.json").resolve()),

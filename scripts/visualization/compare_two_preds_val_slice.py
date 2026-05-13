@@ -114,8 +114,12 @@ def main() -> None:
     gt_dir = REPO_ROOT / "nnUNet_raw" / "Dataset001_LiverTumor" / "labelsTr"
     ct_path = images_dir / f"{case_id}_0000{fe}"
     gt_path = gt_dir / f"{case_id}{fe}"
-    pred_a = (Path(args.pred_dir_a).resolve() if Path(args.pred_dir_a).is_absolute() else REPO_ROOT / args.pred_dir_a) / f"{case_id}{fe}"
-    pred_b = (Path(args.pred_dir_b).resolve() if Path(args.pred_dir_b).is_absolute() else REPO_ROOT / args.pred_dir_b) / f"{case_id}{fe}"
+    pred_a_root = Path(args.pred_dir_a)
+    pred_a_root = pred_a_root if pred_a_root.is_absolute() else REPO_ROOT / pred_a_root
+    pred_b_root = Path(args.pred_dir_b)
+    pred_b_root = pred_b_root if pred_b_root.is_absolute() else REPO_ROOT / pred_b_root
+    pred_a = pred_a_root / f"{case_id}{fe}"
+    pred_b = pred_b_root / f"{case_id}{fe}"
 
     for path, lbl in [(ct_path, "CT"), (gt_path, "GT"), (pred_a, "pred-a"), (pred_b, "pred-b")]:
         if not path.is_file():

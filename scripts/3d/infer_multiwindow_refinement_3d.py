@@ -57,7 +57,10 @@ def _parse_args() -> argparse.Namespace:
         "--output",
         type=str,
         default=None,
-        help="Output directory for segmentations. Default: ``<model-dir>/fold_<fold>/validation`` (same layout as nnU-Net training export).",
+        help=(
+            "Output directory for segmentations. "
+            "Default: ``<model-dir>/fold_<fold>/validation`` (nnU-Net training layout)."
+        ),
     )
     p.add_argument("--fold", type=int, default=0)
     p.add_argument("--checkpoint", type=str, default="checkpoint_best.pth")
@@ -87,7 +90,7 @@ def _load_network_and_plans_4ch(
     checkpoint_name: str,
     device: torch.device,
 ):
-    """Load checkpoint and build U-Net with 4 inputs (stock nnUNetPredictor uses ``determine_num_input_channels`` → 1)."""
+    """Load checkpoint; build U-Net with 4 inputs (predictor uses ``determine_num_input_channels`` → 1)."""
     from batchgenerators.utilities.file_and_folder_operations import join, load_json
     import nnunetv2
     from nnunetv2.utilities.find_class_by_name import recursive_find_python_class

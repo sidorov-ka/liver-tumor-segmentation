@@ -10,7 +10,8 @@ not a separate ``nnUNetv2_predict`` call — defaults (checkpoint, step size, TT
 - ``--split val`` (or ``train``): only cases listed in ``nnUNet_preprocessed/.../splits_final.json``
   for ``--fold`` (typical val metrics; input folder is still ``imagesTr`` or a staging dir).
 - ``--skip-existing``: skip cases whose output ``<case_id>.nii.gz`` already exists under ``-o``.
-- By default ``case_0004`` and ``case_0018`` are skipped (very large volumes); use ``--no-skip-heavy-val`` to include them.
+- By default ``case_0004`` and ``case_0018`` are skipped (very large volumes);
+  use ``--no-skip-heavy-val`` to include them.
   ``--exclude-cases`` adds more IDs to skip (same as ``infer_multiview`` / ``infer_uncertainty``).
 - ``--save-probabilities``: save nnU-Net softmax (``<case_id>.npz`` + ``<case_id>.pkl`` + stage-1
   ``<case_id>.nii.gz`` in nnU-Net layout). Use ``--prob-dir`` or defaults below.
@@ -50,7 +51,7 @@ from coarse_to_fine.roi import bbox3d_from_mask, threshold_coarse_tumor  # noqa:
 from coarse_to_fine.utils import load_checkpoint  # noqa: E402
 
 DEFAULT_INFERENCE_SUBDIR = "two_stage"
-# Experiment roots under inference_comparison/: baseline (nnU-Net only), coarse_to_fine (two-stage), multiview (scripts/2d/infer_multiview.py).
+# inference_comparison/: baseline, coarse_to_fine, multiview (infer_multiview.py).
 DEFAULT_OUTPUT_ROOT_BASELINE = "inference_comparison/baseline"
 DEFAULT_OUTPUT_ROOT_COARSE_TO_FINE = "inference_comparison/coarse_to_fine"
 DEFAULT_DATASET_FOLDER = "Dataset001_LiverTumor"
@@ -133,8 +134,10 @@ def _parse_args() -> argparse.Namespace:
         "--output",
         type=str,
         default=None,
-        help="Output folder for final segmentations (per-case subfolders). If omitted, defaults under "
-        f"--output-root (see --stage1-only / two-stage layout).",
+        help=(
+            "Output folder for final segmentations (per-case subfolders). If omitted, defaults under "
+            "--output-root (see --stage1-only / two-stage layout)."
+        ),
     )
     p.add_argument(
         "--output-root",
@@ -209,7 +212,10 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         dest="coarse_to_fine_dir",
-        help="coarse_to_fine run dir with checkpoint_best.pth and meta.json (stage coarse_to_fine). Not used with --stage1-only.",
+        help=(
+            "coarse_to_fine run dir with checkpoint_best.pth and meta.json (stage coarse_to_fine). "
+            "Not used with --stage1-only."
+        ),
     )
     p.add_argument(
         "--stage1-only",
@@ -315,7 +321,8 @@ def _refine_roi_slices(
         nh, nw = img2d.shape
         ti = torch.from_numpy(_normalize_slice(img2d))[None, None].to(device)
         tc = torch.from_numpy(coarse2d)[None, None].to(device)
-        # Match train dataset: bilinear for CT and prob; nearest for binary coarse (coarse_to_fine.dataset._resize_pair).
+        # Match train: bilinear for CT and prob; nearest for binary coarse
+        # (coarse_to_fine.dataset._resize_pair).
         ti = F.interpolate(ti, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
         if use_coarse_prob:
             tc = F.interpolate(tc, size=(h_crop, w_crop), mode="bilinear", align_corners=False)
@@ -372,10 +379,10 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path and meta_path.is_file() else {}
     _cs = meta.get("crop_size", [256, 256])
     crop_size = (int(_cs[0]), int(_cs[1]))
-    # Default True: matches train_coarse_to_fine (nnU-Net softmax prob channel). Old meta.json may set false.
+    # Default True: matches train_coarse_to_fine (nnU-Net softmax prob). Old meta may set false.
     use_coarse_prob = bool(meta.get("use_coarse_prob", True))
     in_channels = int(meta.get("in_channels", 2))
-    # 3D ROI padding (Z,Y,X): Y/X match train_coarse_to_fine roi_pad_xy; Z uses small default (per-slice training has no Z pad).
+    # 3D ROI pad (Z,Y,X): Y/X = train roi_pad_xy; Z = small default (slice training has no Z pad).
     _rp = meta.get("roi_pad_xy", [16, 16])
     _mr = meta.get("min_roi_xy", [32, 32])
     bbox3d_pad = (2, int(_rp[0]), int(_rp[1]))

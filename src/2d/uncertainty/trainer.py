@@ -248,21 +248,24 @@ def run_training(
                 meta={"val_dice_aggregated": best_dice, "val_dice_batch_mean": va["dice"]},
             )
             per_case_list = merge_per_case_metrics(va["per_case_confusion"], LABEL_TUMOR)
+            gm_float = {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}
             best_summary = {
                 "task": "uncertainty_binary_tumor",
                 "label": "tumor maps to nnU-Net label key",
                 "label_key": LABEL_TUMOR,
-                "foreground_mean": {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()},
-                "mean": {LABEL_TUMOR: {k: float(v) if isinstance(v, (float, int)) else v for k, v in gm.items()}},
+                "foreground_mean": gm_float,
+                "mean": {LABEL_TUMOR: dict(gm_float)},
                 "metric_per_case": per_case_list,
                 "best_epoch": epoch,
-                "note": "Val metrics on 5-channel ROI crops; training hyperparameters in meta.json / training_args.json.",
+                "note": (
+                    "Val on 5-channel ROI crops; see meta.json / training_args.json for hyperparameters."
+                ),
             }
             (val_dir / "summary.json").write_text(
                 json.dumps(best_summary, indent=2),
                 encoding="utf-8",
             )
-            log(f"Yayy! New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}", also_print=True)
+            log(f"New best aggregated Dice (label {LABEL_TUMOR}): {best_dice:.6f}", also_print=True)
         log("", also_print=False)
 
     log("Training done.", also_print=True)

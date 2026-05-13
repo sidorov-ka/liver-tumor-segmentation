@@ -1,7 +1,8 @@
 """Light 2D U-Net (``TinyUNet2d``): shared backbone for stage-2 refiners.
 
-coarse_to_fine follows Li et al., *Universal Topology Refinement* (arXiv:2409.09796); multiview uses
-multi-window fusion (e.g. IEEE TMI lung-nodule work); uncertainty adds an entropy channel. Base nnU-Net: Isensee et al., nnU-Net v2.
+coarse_to_fine: Li et al., *Universal Topology Refinement* (arXiv:2409.09796).
+multiview: multi-window fusion; uncertainty: extra entropy channel.
+Base nnU-Net: Isensee et al., nnU-Net v2.
 """
 
 from __future__ import annotations

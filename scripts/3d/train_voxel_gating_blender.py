@@ -21,10 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import os
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import torch
@@ -140,20 +137,68 @@ class VoxelBlender(torch.nn.Module):
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Train voxel-wise blender (one-hot(A)+one-hot(B) -> GT).")
-    p.add_argument("--pred-a", type=str, required=True, help="Folder A with *.nii.gz predictions (e.g. adaptive).")
-    p.add_argument("--pred-b", type=str, required=True, help="Folder B with *.nii.gz predictions (e.g. size-gated).")
-    p.add_argument("--gt-dir", type=str, required=True, help="GT folder with *.nii.gz (e.g. nnUNet_preprocessed/.../gt_segmentations).")
-    p.add_argument("--out-dir", type=str, required=True, help="Output folder for blender.pth and meta.json.")
-    p.add_argument("--num-classes", type=int, default=3, help="Total number of classes in masks (default 3: bg,liver,tumor).")
+    p = argparse.ArgumentParser(
+        description="Train voxel-wise blender (one-hot(A)+one-hot(B) -> GT).",
+    )
+    p.add_argument(
+        "--pred-a",
+        type=str,
+        required=True,
+        help="Folder A with *.nii.gz predictions (e.g. adaptive).",
+    )
+    p.add_argument(
+        "--pred-b",
+        type=str,
+        required=True,
+        help="Folder B with *.nii.gz predictions (e.g. size-gated).",
+    )
+    p.add_argument(
+        "--gt-dir",
+        type=str,
+        required=True,
+        help="GT folder with *.nii.gz (e.g. nnUNet_preprocessed/.../gt_segmentations).",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=str,
+        required=True,
+        help="Output folder for blender.pth and meta.json.",
+    )
+    p.add_argument(
+        "--num-classes",
+        type=int,
+        default=3,
+        help="Number of classes in masks (default 3: bg, liver, tumor).",
+    )
     p.add_argument("--tumor-label", type=int, default=2, help="Label id for tumor (default 2).")
     p.add_argument("--dataset-folder", type=str, default="Dataset001_LiverTumor")
     p.add_argument("--fold", type=int, default=0)
-    p.add_argument("--split", type=str, default="val", choices=("val", "train"), help="Which split to train on.")
-    p.add_argument("--nnunet-preprocessed", type=str, default=None, help="Path to nnUNet_preprocessed (for splits_final.json).")
+    p.add_argument(
+        "--split",
+        type=str,
+        default="val",
+        choices=("val", "train"),
+        help="Which split to train on.",
+    )
+    p.add_argument(
+        "--nnunet-preprocessed",
+        type=str,
+        default=None,
+        help="Path to nnUNet_preprocessed (for splits_final.json).",
+    )
     p.add_argument("--epochs", type=int, default=20)
-    p.add_argument("--samples-per-case", type=int, default=50000, help="Random voxels sampled per case per epoch.")
-    p.add_argument("--tumor-frac", type=float, default=0.30, help="Fraction of samples drawn from tumor voxels if present.")
+    p.add_argument(
+        "--samples-per-case",
+        type=int,
+        default=50000,
+        help="Random voxels sampled per case per epoch.",
+    )
+    p.add_argument(
+        "--tumor-frac",
+        type=float,
+        default=0.30,
+        help="Fraction of samples drawn from tumor voxels if present.",
+    )
     p.add_argument("--lr", type=float, default=1e-2)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", type=str, default="cuda", choices=("cuda", "cpu"))
@@ -239,4 +284,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -4,11 +4,12 @@ Axial CT slice with GT vs prediction tumor contours (PNG in repo).
 
 Example:
   python scripts/visualization/visualize_tumor_slice.py --case case_0022
-  python scripts/visualization/visualize_tumor_slice.py --case case_0000 --pred-dir inference_comparison/multiview_infer_run_2026_04_03
-  # Output: one PNG, short name: visualizations/case_0000_z123_multiview.png
+  python scripts/visualization/visualize_tumor_slice.py --case case_0000 \\
+    --pred-dir inference_comparison/multiview_infer_run_2026_04_03
 
-  All val cases for fold 0 (only cases with a pred file under --pred-dir):
-  python scripts/visualization/visualize_tumor_slice.py --pred-dir inference_comparison/uncertainty \\
+  All val cases for fold 0 (cases that have a pred under --pred-dir):
+  python scripts/visualization/visualize_tumor_slice.py \\
+    --pred-dir inference_comparison/uncertainty \\
     --split val --fold 0 --output-dir visualizations/uncertainty_val_fold0
 """
 
@@ -219,8 +220,12 @@ def _visualize_one_case(
 
 def main() -> None:
     args = _parse_args()
-    pred_dir = (REPO_ROOT / args.pred_dir).resolve() if not Path(args.pred_dir).is_absolute() else Path(args.pred_dir)
-    out_dir = (REPO_ROOT / args.output_dir).resolve() if not Path(args.output_dir).is_absolute() else Path(args.output_dir)
+    pred_dir = Path(args.pred_dir)
+    pred_dir = pred_dir if pred_dir.is_absolute() else REPO_ROOT / pred_dir
+    pred_dir = pred_dir.resolve()
+    out_dir = Path(args.output_dir)
+    out_dir = out_dir if out_dir.is_absolute() else REPO_ROOT / out_dir
+    out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dj_path = Path(args.dataset_json)

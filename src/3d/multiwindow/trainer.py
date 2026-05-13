@@ -275,8 +275,8 @@ class nnUNetTrainer_150_MultiWindowRefine_50epochs(nnUNetTrainer_150):
                             d, _, _, _ = tmp.load_case(k)
                         except FileNotFoundError:
                             self.print_to_log_file(
-                                f"Predicting next stage {n} failed for case {k} because the preprocessed file is missing! "
-                                f"Run the preprocessing for this configuration first!"
+                                f"Predicting next stage {n} failed for case {k}: "
+                                "preprocessed file missing; run preprocessing for this configuration first."
                             )
                             continue
 

@@ -29,7 +29,10 @@ DEFAULT_TILE_STEP_SIZE = 0.75
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Export stage-1 nnU-Net preds for train_coarse_to_fine / train_multiview / train_uncertainty (train/val slices)."
+        description=(
+            "Export stage-1 nnU-Net preds for train_coarse_to_fine / "
+            "train_multiview / train_uncertainty (train/val slices)."
+        ),
     )
     p.add_argument(
         "--nnunet-raw",
