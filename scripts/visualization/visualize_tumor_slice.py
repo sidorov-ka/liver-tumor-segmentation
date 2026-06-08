@@ -3,14 +3,13 @@
 Axial CT slice with GT vs prediction tumor contours (PNG in repo).
 
 Example:
-  python scripts/visualization/visualize_tumor_slice.py --case case_0022
-  python scripts/visualization/visualize_tumor_slice.py --case case_0000 \\
-    --pred-dir inference_comparison/multiview_infer_run_2026_04_03
+  python scripts/visualization/visualize_tumor_slice.py --case case_0022 \\
+    --pred-dir results_3d_boundary_shape_runs/20260504_083549_saved_good_boundary/.../fold_0/validation
 
   All val cases for fold 0 (cases that have a pred under --pred-dir):
   python scripts/visualization/visualize_tumor_slice.py \\
-    --pred-dir inference_comparison/uncertainty \\
-    --split val --fold 0 --output-dir visualizations/uncertainty_val_fold0
+    --pred-dir <model-dir>/fold_0/validation \\
+    --split val --fold 0 --output-dir visualizations/my_run_val_fold0
 """
 
 from __future__ import annotations
@@ -28,19 +27,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _short_pred_label(pred_dir: Path, override: Optional[str]) -> str:
-    """Stable short tag for filenames (baseline / coarse_to_fine / multiview / folder name)."""
+    """Stable short tag for filenames (derived from --pred-dir or --label)."""
     if override is not None and str(override).strip():
         return str(override).strip().replace(" ", "_")
     name = pred_dir.name
-    lower = name.lower()
-    if lower == "baseline":
-        return "baseline"
-    if lower == "coarse_to_fine":
-        return "coarse_to_fine"
-    if "uncertainty" in lower:
-        return "uncertainty"
-    if "multiview" in lower:
-        return "multiview"
+    if name == "validation" and pred_dir.parent.name.startswith("fold_"):
+        name = pred_dir.parent.parent.name
     if len(name) > 40:
         return name[:37] + "..."
     return name
@@ -95,11 +87,16 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="case_id, e.g. case_0022. Omit with --split to render all matching cases.",
     )
+    default_val = (
+        "results_3d_default_finetune/Dataset001_LiverTumor/"
+        "nnUNetTrainer_150_DefaultFinetune_50epochs__nnUNetPlans_3d_midres125__3d_fullres/"
+        "fold_0/validation"
+    )
     p.add_argument(
         "--pred-dir",
         type=str,
-        default="inference_comparison/baseline",
-        help="Folder with <case_id>.nii.gz (nnU-Net or multiview output).",
+        default=default_val,
+        help="Folder with <case_id>.nii.gz (e.g. fold_0/validation from a 3D run).",
     )
     p.add_argument(
         "--output-dir",
@@ -130,7 +127,7 @@ def _parse_args() -> argparse.Namespace:
         "--label",
         type=str,
         default=None,
-        help="Short tag in output filename (default: baseline / coarse_to_fine / multiview from --pred-dir).",
+        help="Short tag in output filename (default: derived from --pred-dir).",
     )
     p.add_argument(
         "--split",

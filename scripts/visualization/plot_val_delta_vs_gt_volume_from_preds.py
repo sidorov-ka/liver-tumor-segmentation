@@ -16,7 +16,6 @@ Example:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -27,10 +26,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-_VIZ_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(_VIZ_DIR))
 
-from plot_multiview_delta_vs_volume import load_nifti  # noqa: E402
+
+def load_nifti(path: Path) -> Tuple[np.ndarray, Any]:
+    """Load volume; gzip fallback if extension is .nii.gz but file is uncompressed."""
+    import nibabel as nib
+
+    try:
+        img = nib.load(str(path))
+        return np.asanyarray(img.dataobj), img
+    except Exception:
+        raw = path.read_bytes()
+        if len(raw) >= 4 and raw[:4] == b"\x1f\x8b\x08\x00":
+            raise
+        from nibabel import Nifti1Image
+
+        return np.asanyarray(Nifti1Image.from_bytes(raw).dataobj), None
 
 
 def _spacing_mm3_from_img(img: Any) -> float:
@@ -207,7 +218,7 @@ def _parse_args() -> argparse.Namespace:
         "--fig-height",
         type=float,
         default=6.0,
-        help="Figure height in inches (matches plot_multiview_delta_vs_volume default).",
+        help="Figure height in inches.",
     )
     return p.parse_args()
 

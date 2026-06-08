@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Stage 1 only: nnU-Net v2 for Dataset001_LiverTumor — plan, preprocess (3d_fullres, splits_final.json), train fold 0.
-# Same role as scripts/2d/train_nnunet_2d.sh but for 3d_fullres instead of 2d.
 # Skip preprocess if cache is valid:
 #   bash scripts/3d/train_nnunet_3d.sh --skip-preprocess
 # or: SKIP_NNUNET_PREPROCESS=1 bash scripts/3d/train_nnunet_3d.sh

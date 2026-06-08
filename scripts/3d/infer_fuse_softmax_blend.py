@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Fuse two nnU-Net softmax exports (``--save-probabilities`` from
-``infer_coarse_to_fine`` / nnU-Net) and write hard segmentations (NIfTI).
+Fuse two nnU-Net softmax exports (``--save-probabilities`` from nnU-Net validation
+or inference) and write hard segmentations (NIfTI).
 
 Each input directory must contain ``<case_id>.npz`` (``probabilities``,
 shape C×Z×Y×X in patient space) and ``<case_id>.pkl``. Both runs need the
