@@ -45,6 +45,31 @@ def _extract_axial(vol: np.ndarray, z: int) -> np.ndarray:
     return vol[int(z), :, :].astype(np.float32)
 
 
+def _foreground_crop_bbox(
+    label_slice: np.ndarray,
+    liver_label: int,
+    tumor_label: int,
+    margin: int,
+) -> tuple[int, int, int, int]:
+    """Row/col bounds (r0, r1, c0, c1) around liver ∪ tumor."""
+    fg = (label_slice == liver_label) | (label_slice == tumor_label)
+    if not np.any(fg):
+        h, w = label_slice.shape
+        return 0, h, 0, w
+    rows = np.where(fg.any(axis=1))[0]
+    cols = np.where(fg.any(axis=0))[0]
+    m = max(0, int(margin))
+    r0 = max(0, int(rows[0]) - m)
+    r1 = min(label_slice.shape[0], int(rows[-1]) + m + 1)
+    c0 = max(0, int(cols[0]) - m)
+    c1 = min(label_slice.shape[1], int(cols[-1]) + m + 1)
+    return r0, r1, c0, c1
+
+
+def _crop2d(slice_2d: np.ndarray, r0: int, r1: int, c0: int, c1: int) -> np.ndarray:
+    return slice_2d[r0:r1, c0:c1]
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--case", type=str, default="case_0004")
@@ -85,18 +110,35 @@ def main() -> None:
         default=str(REPO_ROOT / "nnUNet_raw" / "Dataset001_LiverTumor" / "dataset.json"),
     )
     p.add_argument("--ct-window", type=float, nargs=2, default=[-100.0, 400.0])
-    p.add_argument("--dpi", type=int, default=300, help="PNG resolution (default 300).")
+    p.add_argument(
+        "--dpi",
+        type=int,
+        default=150,
+        help="PNG resolution (150 matches visualize_case_multislice_contact).",
+    )
     p.add_argument(
         "--lw-gt",
         type=float,
-        default=1.15,
-        help="GT contour linewidth (matplotlib units, scaled with figure).",
+        default=2.0,
+        help="GT contour linewidth (2.0 matches single-slice viz).",
     )
     p.add_argument(
         "--lw-pred",
         type=float,
-        default=1.2,
+        default=2.0,
         help="Prediction contour linewidth.",
+    )
+    p.add_argument(
+        "--crop-margin",
+        type=int,
+        default=0,
+        help="If >0, crop panels to liver∪tumor bbox on this slice plus margin (px).",
+    )
+    p.add_argument(
+        "--fig-height",
+        type=float,
+        default=6.9,
+        help="Figure height in inches (width scales with crop aspect).",
     )
     args = p.parse_args()
 
@@ -139,11 +181,30 @@ def main() -> None:
     if z < 0 or z >= ct.shape[0]:
         raise SystemExit(f"z={z} out of range for axis0 depth {ct.shape[0]}")
 
+    liver_label = 1
+    for name, idx in dj.get("labels", {}).items():
+        if str(name).lower() == "liver":
+            liver_label = int(idx)
+            break
+
     lo, hi = float(args.ct_window[0]), float(args.ct_window[1])
     sl_ct = _extract_axial(ct, z)
-    sl_gt = (_extract_axial(gt, z) == tumor_label).astype(np.float32)
+    sl_lab = _extract_axial(gt, z)
+    sl_gt = (sl_lab == tumor_label).astype(np.float32)
     sl_a = (_extract_axial(pr_a, z) == tumor_label).astype(np.float32)
     sl_b = (_extract_axial(pr_b, z) == tumor_label).astype(np.float32)
+
+    if int(args.crop_margin) > 0:
+        r0, r1, c0, c1 = _foreground_crop_bbox(
+            sl_lab.astype(np.int16),
+            liver_label,
+            tumor_label,
+            int(args.crop_margin),
+        )
+        sl_ct = _crop2d(sl_ct, r0, r1, c0, c1)
+        sl_gt = _crop2d(sl_gt, r0, r1, c0, c1)
+        sl_a = _crop2d(sl_a, r0, r1, c0, c1)
+        sl_b = _crop2d(sl_b, r0, r1, c0, c1)
 
     sl_vis = np.clip(sl_ct, lo, hi)
     sl_vis = (sl_vis - lo) / (hi - lo + 1e-8)
@@ -171,27 +232,51 @@ def main() -> None:
 
     lw_gt = float(args.lw_gt)
     lw_pr = float(args.lw_pred)
+    use_crop = int(args.crop_margin) > 0
+    imshow_aspect = "equal" if use_crop else "auto"
 
-    # Images + caption row under each panel (model / Δ title).
-    fig = plt.figure(figsize=(17.5, 6.9))
+    if use_crop:
+        h_px, w_px = sl_vis.shape
+        aspect = w_px / max(h_px, 1)
+        panel_w_in = float(args.fig_height) * aspect
+        fig_w = panel_w_in * 3.0 + 1.2
+        fig_h = float(args.fig_height) + 1.55
+        gs_margins = dict(
+            hspace=0.10,
+            left=0.01,
+            right=0.99,
+            top=0.92,
+            bottom=0.17,
+            wspace=0.04,
+        )
+        cap_height_ratio = 0.08
+    else:
+        # Same framing as visualize_case_multislice_contact (9×9 per panel feel).
+        fig_w, fig_h = 17.5, float(args.fig_height)
+        gs_margins = dict(
+            hspace=0.14,
+            left=0.02,
+            right=0.98,
+            top=0.90,
+            bottom=0.19,
+            wspace=0.06,
+        )
+        cap_height_ratio = 0.1
+
+    fig = plt.figure(figsize=(fig_w, fig_h))
     gs = fig.add_gridspec(
         2,
         3,
-        height_ratios=[1.0, 0.1],
-        hspace=0.14,
-        left=0.02,
-        right=0.98,
-        top=0.90,
-        bottom=0.19,
-        wspace=0.06,
+        height_ratios=[1.0, cap_height_ratio],
+        **gs_margins,
     )
     axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
     cap_axes = [fig.add_subplot(gs[1, i]) for i in range(3)]
     for cax in cap_axes:
         cax.axis("off")
 
-    gt_color = "#66FF66"
-    pred_a_color = "#FF1744"
+    gt_color = "lime"
+    pred_a_color = "red"
     pred_b_color = "#FF00E5"
     delta_pos_rgb = (0.15, 0.95, 1.0)
     delta_neg_rgb = (1.0, 0.38, 0.18)
@@ -201,7 +286,7 @@ def main() -> None:
             sl_vis.T,
             cmap="gray",
             origin="lower",
-            aspect="auto",
+            aspect=imshow_aspect,
             interpolation="nearest",
         )
         ax.contour(
@@ -229,7 +314,7 @@ def main() -> None:
         sl_vis.T,
         cmap="gray",
         origin="lower",
-        aspect="auto",
+        aspect=imshow_aspect,
         interpolation="nearest",
     )
     axd.contour(
@@ -253,7 +338,7 @@ def main() -> None:
     _stamp(delta_pos, delta_pos_rgb, 0.52)
     _stamp(delta_neg, delta_neg_rgb, 0.48)
     rgba[:, :, 3] = np.clip(rgba[:, :, 3], 0.0, 1.0)
-    axd.imshow(rgba, origin="lower", aspect="auto", interpolation="nearest")
+    axd.imshow(rgba, origin="lower", aspect=imshow_aspect, interpolation="nearest")
 
     axd.axis("off")
 
