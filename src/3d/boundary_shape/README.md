@@ -92,4 +92,4 @@ The shell wrapper writes new runs under `results_3d_boundary_shape_runs/<RUN_NAM
 Reference result folders in this repo’s workflow: `20260504_083549_saved_good_boundary/`,
 `20260509_131406_boundary_adaptive_large_tumor/`, `20260509_160927_boundary_size_gated/`
 (saved-good, adaptive-large-tumor, size-gated). Re-validate with
-`scripts/revalidate_3d_boundary_shape_runs.sh`.
+`scripts/3d/revalidate_3d_boundary_shape_runs.sh`.

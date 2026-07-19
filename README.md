@@ -2,7 +2,12 @@
 
 Multiclass liver and tumor segmentation on CT with [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet), dataset id `Dataset001_LiverTumor` (nnU-Net folder layout).
 
-**3D experiments** (local trainers under `src/3d/`, registered via `scripts/3d/run_nnunet_with_local_3d_trainers.py`): baseline `3d_fullres` training, default Dice+CE fine-tune, and boundary/shape loss fine-tuning.
+**3D loss experiments** (local trainers under `src/3d/`, registered via `scripts/3d/run_nnunet_with_local_3d_trainers.py`):
+
+1. **Default fine-tune** (control) — Dice+CE  
+2. **Boundary/shape** — three runs: Tversky-guard, adaptive-large-tumor, size-gated  
+
+See `src/3d/README.md` and `src/3d/boundary_shape/presets/`.
 
 ## Requirements
 
@@ -49,9 +54,6 @@ After changing the training case list, update `numTraining` in `dataset.json`.
 | `train_3d_default_finetune.sh` | 3D baseline fine-tune (default loss) |
 | `train_3d_boundary_shape.sh` | 3D boundary/shape fine-tune |
 | `run_nnunet_with_local_3d_trainers.py` | Launches nnU-Net with local trainer classes |
-| `infer_fuse_softmax_blend.py` | Blend two saved softmax folders into one segmentation |
-| `train_voxel_gating_blender.py` | Train per-voxel linear blender on two pred folders |
-| `infer_voxel_gating_blender.py` | Apply `blender.pth` to fuse two pred folders |
 | `revalidate_3d_boundary_shape_runs.sh` | Re-run `--val` for boundary trainer runs |
 
 ### `scripts/visualization/`
@@ -97,9 +99,9 @@ liver-tumor-segmentation/
 ├── .flake8
 ├── src/
 │   └── 3d/
-│       ├── default_finetune/
-│       ├── boundary_shape/
-│       └── nnunetv2/training/nnUNetTrainer/   # trainer shims
+│       ├── default_finetune/          # control
+│       ├── boundary_shape/            # custom loss + 3 presets
+│       └── nnunetv2/training/nnUNetTrainer/
 ├── scripts/
 │   ├── 3d/
 │   ├── visualization/
