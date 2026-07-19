@@ -1,4 +1,4 @@
-"""nnUNetTrainer with num_epochs=150 — some nnunetv2 wheels omit this class in nnUNetTrainer_Xepochs."""
+"""nnUNetTrainer with num_epochs=500 for matched from-scratch loss experiments."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import torch
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 
 
-class nnUNetTrainer_150(nnUNetTrainer):
+class nnUNetTrainer_500(nnUNetTrainer):
     def __init__(
         self,
         plans: dict,
@@ -16,7 +16,7 @@ class nnUNetTrainer_150(nnUNetTrainer):
         device: torch.device = torch.device("cuda"),
     ) -> None:
         super().__init__(plans, configuration, fold, dataset_json, device)
-        self.num_epochs = 150
+        self.num_epochs = 500
 
 
-__all__ = ["nnUNetTrainer_150"]
+__all__ = ["nnUNetTrainer_500"]

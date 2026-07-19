@@ -6,8 +6,10 @@
     "**/nnUNet_preprocessed/**": true,
     "**/nnUNet_raw/**": true,
     "**/nnUNet_results/**": true,
-    "**/results_3d_default_finetune/**": true,
-    "**/results_3d_boundary_shape_runs/**": true,
+    "**/results_3d_baseline/**": true,
+    "**/results_3d_anatomical/**": true,
+    "**/results_3d_boundary_hd/**": true,
+    "**/results_3d_topology/**": true,
     "**/refinement_export/**": true,
     "**/refinement_results/**": true,
     "**/.venv/**": true

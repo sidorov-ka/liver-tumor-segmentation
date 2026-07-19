@@ -127,7 +127,7 @@ def _load_full_pretrained_weights(network, fname: str, verbose: bool = False) ->
 
 
 def _patch_pretrained_weight_loading() -> None:
-    """Fine-tuning should start from the exact checkpoint, including seg_layers."""
+    """Optional full-checkpoint load if -pretrained_weights is passed."""
     import nnunetv2.run.run_training as run_training
 
     run_training.load_pretrained_weights = _load_full_pretrained_weights

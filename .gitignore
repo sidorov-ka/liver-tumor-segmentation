@@ -31,11 +31,15 @@ nnUNet_preprocessed/*
 nnUNet_results/*
 !nnUNet_results/.gitkeep
 
-# 3D experiment outputs
-results_3d_default_finetune/*
-!results_3d_default_finetune/.gitkeep
-results_3d_boundary_shape_runs/*
-!results_3d_boundary_shape_runs/.gitkeep
+# 3D experiment outputs (from-scratch loss arms)
+results_3d_baseline/*
+!results_3d_baseline/.gitkeep
+results_3d_anatomical/*
+!results_3d_anatomical/.gitkeep
+results_3d_boundary_hd/*
+!results_3d_boundary_hd/.gitkeep
+results_3d_topology/*
+!results_3d_topology/.gitkeep
 
 # legacy / optional local dirs
 refinement_results/*

@@ -5,12 +5,12 @@ predictions under fold_0/validation and GT segmentations (no metrics JSON).
 
 Example:
   .venv/bin/python scripts/visualization/plot_val_delta_vs_gt_volume_from_preds.py \\
-    --baseline-pred-dir results_3d_default_finetune/.../fold_0/validation \\
-    --baseline-label "3D nnUNet (baseline)" \\
+    --baseline-pred-dir results_3d_baseline/.../fold_0/validation \\
+    --baseline-label "Baseline Dice+CE" \\
     --gt-dir nnUNet_raw/Dataset001_LiverTumor/labelsTr \\
-    --model-pred-dir results_3d_boundary_shape_runs/20260509_131406_.../fold_0/validation \\
-    --model-label "Adaptive large tumor" \\
-    --output-png visualizations/delta_vs_vol_adaptive.png
+    --model-pred-dir results_3d_anatomical/.../fold_0/validation \\
+    --model-label "Anatomical" \\
+    --output-png visualizations/delta_vs_vol_anatomical.png
 """
 
 from __future__ import annotations

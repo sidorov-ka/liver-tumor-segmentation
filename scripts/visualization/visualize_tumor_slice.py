@@ -4,7 +4,7 @@ Axial CT slice with GT vs prediction tumor contours (PNG in repo).
 
 Example:
   python scripts/visualization/visualize_tumor_slice.py --case case_0022 \\
-    --pred-dir results_3d_boundary_shape_runs/20260504_083549_saved_good_boundary/.../fold_0/validation
+    --pred-dir results_3d_baseline/.../fold_0/validation
 
   All val cases for fold 0 (cases that have a pred under --pred-dir):
   python scripts/visualization/visualize_tumor_slice.py \\
@@ -88,8 +88,8 @@ def _parse_args() -> argparse.Namespace:
         help="case_id, e.g. case_0022. Omit with --split to render all matching cases.",
     )
     default_val = (
-        "results_3d_default_finetune/Dataset001_LiverTumor/"
-        "nnUNetTrainer_150_DefaultFinetune_50epochs__nnUNetPlans_3d_midres125__3d_fullres/"
+        "results_3d_baseline/Dataset001_LiverTumor/"
+        "nnUNetTrainer_500_Baseline__nnUNetPlans_3d_midres125__3d_fullres/"
         "fold_0/validation"
     )
     p.add_argument(

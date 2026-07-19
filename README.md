@@ -1,19 +1,29 @@
 # Liver tumor segmentation (nnU-Net v2)
 
-Multiclass liver and tumor segmentation on CT with [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet), dataset id `Dataset001_LiverTumor` (nnU-Net folder layout).
+Multiclass liver and tumor segmentation on CT with [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet).
+Training dataset: `Dataset001_LiverTumor` (LiTS train, nnU-Net layout).
+Held-out test (later): **3D-IRCADb-01**.
 
-**3D loss experiments** (local trainers under `src/3d/`, registered via `scripts/3d/run_nnunet_with_local_3d_trainers.py`):
+## Experiment design
 
-1. **Default fine-tune** (control) — Dice+CE  
-2. **Boundary/shape** — three runs: Tversky-guard, adaptive-large-tumor, size-gated  
+Four matched **from-scratch** arms (500 epochs, no fine-tune, no loss curriculum).
+Start with **fold 0**; full protocol uses **5 folds**; final test on IRCAD.
 
-See `src/3d/README.md` and `src/3d/boundary_shape/presets/`.
+| Arm | Trainer | Loss idea | Output |
+|-----|---------|-----------|--------|
+| 1 Baseline | `nnUNetTrainer_500_Baseline` | default Dice+CE | `results_3d_baseline/` |
+| 2 Anatomical | `nnUNetTrainer_500_Anatomical` | + boundary ring, liver FP hard-neg, Tversky | `results_3d_anatomical/` |
+| 3 Boundary / HD-soft | `nnUNetTrainer_500_BoundaryHD` | + soft Hausdorff proxy | `results_3d_boundary_hd/` |
+| 4 Topology | `nnUNetTrainer_500_Topology` | + soft clDice | `results_3d_topology/` |
+
+Local trainers live under `src/3d/` and are registered via
+`scripts/3d/run_nnunet_with_local_3d_trainers.py`.
 
 ## Requirements
 
 - Python 3.10+
-- CUDA GPU recommended for training and full-volume inference
-- Dependencies: `requirements.txt` (includes `flake8` for style checks)
+- CUDA GPU recommended
+- `requirements.txt` (includes `flake8`)
 
 ## Install
 
@@ -31,55 +41,68 @@ If unset, scripts default to directories **at the repository root**:
 |----------|---------|
 | `nnUNet_raw` | Raw dataset (`<repo>/nnUNet_raw`) |
 | `nnUNet_preprocessed` | Preprocessed data |
-| `nnUNet_results` | nnU-Net training outputs |
+| `nnUNet_results` | Set per arm by the train scripts |
 
 ## Data layout
 
 ```
 nnUNet_raw/Dataset001_LiverTumor/
 ├── dataset.json
-├── imagesTr/
-└── labelsTr/
+├── imagesTr/          # LiTS train (131)
+├── labelsTr/
+├── imagesTs/          # 3D-IRCADb-01 test (20): ircad_XX_0000.nii.gz
+└── labelsTs/          # GT for metrics: ircad_XX.nii.gz
 ```
 
-After changing the training case list, update `numTraining` in `dataset.json`.
+Labels: background `0`, liver `1`, tumor `2`.
 
-## Scripts (what ships in this repo)
+Convert IRCAD from the official zip:
+
+```bash
+.venv/bin/python scripts/data/convert_3dircadb1_to_nnunet.py \
+  --zip /mnt/c/Users/kasid/Downloads/3Dircadb1.zip
+```
+
+## Train
+
+```bash
+# once
+bash scripts/3d/preprocess_nnunet_3d.sh
+
+# fold 0 (default)
+bash scripts/3d/train_3d_baseline.sh --skip-preprocess
+bash scripts/3d/train_3d_anatomical.sh --skip-preprocess
+bash scripts/3d/train_3d_boundary_hd.sh --skip-preprocess
+bash scripts/3d/train_3d_topology.sh --skip-preprocess
+
+# later: other folds
+FOLD=1 bash scripts/3d/train_3d_baseline.sh --skip-preprocess
+```
+
+Post-training fold validation uses `checkpoint_best.pth` by default
+(`NNUNET_VALIDATION_WITH_BEST=0` to use the final checkpoint).
+
+## Scripts
 
 ### `scripts/3d/`
 
 | Script | Purpose |
 |--------|---------|
-| `train_nnunet_3d.sh` | Stage-1 nnU-Net `3d_fullres` |
-| `train_3d_default_finetune.sh` | 3D baseline fine-tune (default loss) |
-| `train_3d_boundary_shape.sh` | 3D boundary/shape fine-tune |
-| `run_nnunet_with_local_3d_trainers.py` | Launches nnU-Net with local trainer classes |
-| `revalidate_3d_boundary_shape_runs.sh` | Re-run `--val` for boundary trainer runs |
+| `preprocess_nnunet_3d.sh` | plan + preprocess |
+| `train_3d_baseline.sh` | arm 1 |
+| `train_3d_anatomical.sh` | arm 2 |
+| `train_3d_boundary_hd.sh` | arm 3 |
+| `train_3d_topology.sh` | arm 4 |
+| `train_3d_arm.sh` | shared launcher |
+| `run_nnunet_with_local_3d_trainers.py` | registers local trainers |
 
 ### `scripts/visualization/`
 
-Matplotlib helpers (outputs typically under `visualizations/`): `visualize_tumor_slice.py`, `visualize_case_multislice_contact.py`, `visualize_case_three_planes.py`, `plot_val_delta_vs_gt_volume_from_preds.py`, `compare_two_preds_val_slice.py`.
+Matplotlib helpers under `visualizations/`.
 
 ### Root `scripts/`
 
-`evaluate_segmentations.py` — pooled / per-case Dice and IoU vs reference labels.
-
-## Default output locations (all gitignored except `.gitkeep` where noted)
-
-Training and large artifacts stay **out of git** (see `.gitignore`):
-
-- `nnUNet_raw/`, `nnUNet_preprocessed/`, `nnUNet_results/`
-- `results_3d_default_finetune/`, `results_3d_boundary_shape_runs/`
-
-Point `--model-dir` and result paths at **your** local directories after training.
-
-## Typical pipeline
-
-1. **nnU-Net 3d stage 1:** `bash scripts/3d/train_nnunet_3d.sh` (optional `--skip-preprocess`).
-2. **Fine-tune:** `bash scripts/3d/train_3d_default_finetune.sh` (control) and/or `bash scripts/3d/train_3d_boundary_shape.sh` (custom loss).
-3. **Metrics:** `python3 scripts/evaluate_segmentations.py --pred-dir … --gt-dir … --output-json metrics.json`.
-
-Boundary loss options and presets: `src/3d/boundary_shape/README.md`, `src/3d/boundary_shape/presets/*.env`.
+`evaluate_segmentations.py` — Dice / IoU vs reference labels.
 
 ## Code style
 
@@ -87,31 +110,22 @@ Boundary loss options and presets: `src/3d/boundary_shape/README.md`, `src/3d/bo
 .venv/bin/flake8 src scripts
 ```
 
-Configuration: `.flake8` (max line length 120, `E203` ignored for slice spacing).
-
-## Repository tree (source and scripts only)
+## Repository tree
 
 ```
 liver-tumor-segmentation/
 ├── README.md
 ├── requirements.txt
-├── LICENSE
-├── .flake8
-├── src/
-│   └── 3d/
-│       ├── default_finetune/          # control
-│       ├── boundary_shape/            # custom loss + 3 presets
-│       └── nnunetv2/training/nnUNetTrainer/
-├── scripts/
-│   ├── 3d/
-│   ├── visualization/
-│   └── evaluate_segmentations.py
-└── nnUNet_* / results_*     # local; see .gitignore
+├── src/3d/
+│   ├── baseline/
+│   ├── anatomical/
+│   ├── boundary_hd/
+│   ├── topology/
+│   ├── common/
+│   └── nnunetv2/training/nnUNetTrainer/
+├── scripts/3d/
+└── nnUNet_* / results_3d_*   # local; gitignored
 ```
-
-## Git push (Cursor / WSL)
-
-If `git push` fails with `vscode-git-…sock` / `ECONNREFUSED`, the repo sets **`git.terminalAuthentication: false`** in `.vscode/settings.json` so the integrated terminal does not use the broken VS Code credential socket. Prefer SSH remote (`git@github.com:…`) after adding your key to GitHub.
 
 ## License
 

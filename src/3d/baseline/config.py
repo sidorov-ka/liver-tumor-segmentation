@@ -5,17 +5,17 @@ import os
 
 
 @dataclass(frozen=True)
-class DefaultFinetuneConfig:
-    """Environment-configurable knobs for default-loss fine-tuning."""
+class BaselineConfig:
+    """Matched from-scratch baseline (default nnU-Net Dice+CE)."""
 
-    num_epochs: int = 50
-    initial_lr: float = 1e-3
+    num_epochs: int = 500
+    initial_lr: float = 1e-2
 
     @classmethod
-    def from_env(cls) -> "DefaultFinetuneConfig":
+    def from_env(cls) -> "BaselineConfig":
         return cls(
-            num_epochs=_env_int("NNUNET_DEFAULT_FINETUNE_EPOCHS", cls.num_epochs),
-            initial_lr=_env_float("NNUNET_DEFAULT_FINETUNE_LR", cls.initial_lr),
+            num_epochs=_env_int("NNUNET_BASELINE_EPOCHS", cls.num_epochs),
+            initial_lr=_env_float("NNUNET_BASELINE_LR", cls.initial_lr),
         )
 
 
