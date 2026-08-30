@@ -89,7 +89,7 @@ def _parse_args() -> argparse.Namespace:
     )
     default_val = (
         "results_3d_baseline/Dataset001_LiverTumor/"
-        "nnUNetTrainer_500_Baseline__nnUNetPlans_3d_midres125__3d_fullres/"
+        "nnUNetTrainer_500_Baseline__nnUNetPlans__3d_fullres/"
         "fold_0/validation"
     )
     p.add_argument(

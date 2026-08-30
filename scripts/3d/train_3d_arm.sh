@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
-# Shared from-scratch trainer launcher for the four loss arms.
+# Internal launcher — use scripts/3d/train.sh instead of calling this directly.
 #
-# Usage (prefer the thin wrappers):
-#   bash scripts/3d/train_3d_baseline.sh
-#   FOLD=0 bash scripts/3d/train_3d_anatomical.sh --skip-preprocess
+#   bash scripts/3d/train_3d_arm.sh <results_subdir> <trainer_class> [--skip-preprocess]
 #
-# Env:
-#   FOLD                 default 0 (use 0..4 for 5-fold)
-#   NNUNET_VALIDATION_WITH_BEST  default 1 (-> --val_best)
-#   SKIP_NNUNET_PREPROCESS=1 or --skip-preprocess
+# Env: FOLD, PLANS, NNUNET_VALIDATION_WITH_BEST, SKIP_NNUNET_PREPROCESS
 set -euo pipefail
 
 if [[ "${#}" -lt 2 ]]; then
@@ -23,6 +18,11 @@ shift 2
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_ROOT}"
 
+# shellcheck source=resolve_python.sh
+source "${REPO_ROOT}/scripts/3d/resolve_python.sh"
+PYTHON_BIN_SET="${PYTHON_BIN:-}"
+require_nnunet_python "${REPO_ROOT}"
+
 export nnUNet_raw="${nnUNet_raw:-${REPO_ROOT}/nnUNet_raw}"
 export nnUNet_preprocessed="${nnUNet_preprocessed:-${REPO_ROOT}/nnUNet_preprocessed}"
 readonly RESULTS_ROOT="${RESULTS_ROOT:-${REPO_ROOT}/${RESULTS_SUBDIR}}"
@@ -31,8 +31,8 @@ export nnUNet_results="${RESULTS_ROOT}"
 readonly DATASET_ID=1
 readonly CONFIGURATION="3d_fullres"
 readonly FOLD="${FOLD:-0}"
-readonly PLANS="nnUNetPlans_3d_midres125"
-readonly TARGET_SPACING=(1.25 1.0 1.0)
+readonly PLANS="${PLANS:-nnUNetPlans}"
+readonly PLANS_JSON="${nnUNet_preprocessed}/Dataset001_LiverTumor/${PLANS}.json"
 
 SKIP_PREPROCESS=0
 if [[ "${1:-}" == "--skip-preprocess" ]]; then
@@ -51,14 +51,26 @@ if [[ ! "${FOLD}" =~ ^[0-4]$ ]]; then
 fi
 
 mkdir -p "${RESULTS_ROOT}"
-echo "Arm trainer=${TRAINER} fold=${FOLD} -> ${RESULTS_ROOT}"
+echo "Arm trainer=${TRAINER} fold=${FOLD} plans=${PLANS} -> ${RESULTS_ROOT}"
 
 if [[ "${SKIP_PREPROCESS}" -eq 0 ]]; then
-  nnUNetv2_plan_and_preprocess -d "${DATASET_ID}" -npfp 1 -np 1 -c "${CONFIGURATION}" \
-    -overwrite_target_spacing "${TARGET_SPACING[@]}" \
-    -overwrite_plans_name "${PLANS}" \
-    --clean
+  PLAN_ARGS=()
+  if [[ "${NNUNET_CLEAN_PREPROCESS:-0}" == "1" ]]; then
+    PLAN_ARGS+=(--clean)
+  fi
+  "${PLAN_BIN}" \
+    -d "${DATASET_ID}" \
+    --verify_dataset_integrity \
+    -c "${CONFIGURATION}" \
+    -npfp "${NNUNET_FINGERPRINT_PROCESSES:-4}" \
+    -np "${NNUNET_PREPROCESS_PROCESSES:-4}" \
+    "${PLAN_ARGS[@]}"
 else
+  if [[ ! -f "${PLANS_JSON}" ]]; then
+    echo "Missing preprocessed plans: ${PLANS_JSON}" >&2
+    echo "Run once: bash scripts/3d/train.sh plan" >&2
+    exit 1
+  fi
   echo "Skipping nnUNetv2_plan_and_preprocess (preprocessed data assumed valid)."
 fi
 
@@ -68,7 +80,7 @@ if [[ "${NNUNET_VALIDATION_WITH_BEST:-1}" != "0" ]]; then
   echo "Post-training validation will use checkpoint_best.pth (fold_${FOLD}/validation/)."
 fi
 
-"${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/scripts/3d/run_nnunet_with_local_3d_trainers.py" \
+"${PYTHON_BIN}" "${REPO_ROOT}/scripts/3d/run_nnunet_with_local_3d_trainers.py" \
   "${DATASET_ID}" "${CONFIGURATION}" "${FOLD}" \
   -tr "${TRAINER}" \
   -p "${PLANS}" \

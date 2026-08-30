@@ -1,5 +1,6 @@
-nnunetv2
+# Training stack (DataSphere / GPU). Install PyTorch first:
+#   pip install torch==2.5.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+nnunetv2==2.6.4
+numpy==1.26.4
 scipy>=1.9.0
 tensorboard>=2.10.0
-matplotlib>=3.7.0
-flake8>=7.0.0

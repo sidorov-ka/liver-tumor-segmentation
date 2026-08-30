@@ -5,7 +5,7 @@ morphological boundaries + banded distance maps (proxy for surface distance;
 report true HD95 at evaluation).
 
 - Trainer: `nnUNetTrainer_500_BoundaryHD`
-- Entry: `bash scripts/3d/train_3d_boundary_hd.sh`
+- Entry: `bash scripts/3d/train.sh boundary-hd`
 - Output: `results_3d_boundary_hd/`
 
 Env: `NNUNET_BOUNDARY_HD_EPOCHS`, `NNUNET_BOUNDARY_HD_LR`,

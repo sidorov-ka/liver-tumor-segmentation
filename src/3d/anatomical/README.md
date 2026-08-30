@@ -10,7 +10,7 @@ No size gates, adaptive FP scaling, under-volume term, or epoch curriculum —
 all additive weights are active from epoch 0.
 
 - Trainer: `nnUNetTrainer_500_Anatomical`
-- Entry: `bash scripts/3d/train_3d_anatomical.sh`
+- Entry: `bash scripts/3d/train.sh anatomical`
 - Output: `results_3d_anatomical/`
 
 Main env knobs (`NNUNET_ANATOMICAL_*`): `EPOCHS`, `LR`, `BOUNDARY_WEIGHT`,

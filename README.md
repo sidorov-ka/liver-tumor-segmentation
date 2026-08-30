@@ -1,131 +1,98 @@
 # Liver tumor segmentation (nnU-Net v2)
 
 Multiclass liver and tumor segmentation on CT with [nnU-Net v2](https://github.com/MIC-DKFZ/nnUNet).
-Training dataset: `Dataset001_LiverTumor` (LiTS train, nnU-Net layout).
-Held-out test (later): **3D-IRCADb-01**.
+Training dataset: `Dataset001_LiverTumor` (LiTS train). Held-out test: **3D-IRCADb-01**.
 
 ## Experiment design
 
-Four matched **from-scratch** arms (500 epochs, no fine-tune, no loss curriculum).
-Start with **fold 0**; full protocol uses **5 folds**; final test on IRCAD.
+Four matched **from-scratch** arms (500 epochs, standard `nnUNetPlans`):
 
-| Arm | Trainer | Loss idea | Output |
-|-----|---------|-----------|--------|
-| 1 Baseline | `nnUNetTrainer_500_Baseline` | default Dice+CE | `results_3d_baseline/` |
-| 2 Anatomical | `nnUNetTrainer_500_Anatomical` | + boundary ring, liver FP hard-neg, Tversky | `results_3d_anatomical/` |
-| 3 Boundary / HD-soft | `nnUNetTrainer_500_BoundaryHD` | + soft Hausdorff proxy | `results_3d_boundary_hd/` |
+| Arm | Trainer | Loss | Output |
+|-----|---------|------|--------|
+| 1 Baseline | `nnUNetTrainer_500_Baseline` | Dice+CE | `results_3d_baseline/` |
+| 2 Anatomical | `nnUNetTrainer_500_Anatomical` | + boundary, liver FP, Tversky | `results_3d_anatomical/` |
+| 3 Boundary-HD | `nnUNetTrainer_500_BoundaryHD` | + soft Hausdorff | `results_3d_boundary_hd/` |
 | 4 Topology | `nnUNetTrainer_500_Topology` | + soft clDice | `results_3d_topology/` |
 
-Local trainers live under `src/3d/` and are registered via
-`scripts/3d/run_nnunet_with_local_3d_trainers.py`.
+Custom trainers live in `src/3d/` and are registered via `scripts/3d/run_nnunet_with_local_3d_trainers.py`.
 
-## Requirements
+## Setup (DataSphere or local)
 
-- Python 3.10+
-- CUDA GPU recommended
-- `requirements.txt` (includes `flake8`)
-
-## Install
+**Option A — project venv** (once):
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install torch==2.5.1+cu118 --index-url https://download.pytorch.org/whl/cu118
 pip install -r requirements.txt
 ```
 
-## nnU-Net environment variables
+**Option B — DataSphere Jupyter kernel** (if deps already installed in kernel):
 
-If unset, scripts default to directories **at the repository root**:
+```python
+import os, subprocess, sys
+env = os.environ.copy()
+env["PYTHON_BIN"] = sys.executable
+subprocess.run(["bash", "scripts/3d/train.sh", "preflight"], env=env, check=True)
+```
 
-| Variable | Purpose |
-|----------|---------|
-| `nnUNet_raw` | Raw dataset (`<repo>/nnUNet_raw`) |
-| `nnUNet_preprocessed` | Preprocessed data |
-| `nnUNet_results` | Set per arm by the train scripts |
+`train.sh` auto-detects Python in order: `PYTHON_BIN` → `.venv` → active `VIRTUAL_ENV` → `python3` on PATH.
+If `.venv` already exists with requirements installed, you do **not** need to recreate it.
+
+Upload `nnUNet_raw/` separately (not in git). Set paths if needed:
+
+```bash
+export nnUNet_raw=/path/to/nnUNet_raw
+export nnUNet_preprocessed=/path/to/nnUNet_preprocessed
+```
+
+## Train
+
+Single entrypoint — `scripts/3d/train.sh`:
+
+```bash
+bash scripts/3d/train.sh preflight
+bash scripts/3d/train.sh plan          # once
+bash scripts/3d/train.sh baseline
+bash scripts/3d/train.sh anatomical
+bash scripts/3d/train.sh boundary-hd
+bash scripts/3d/train.sh topology
+```
+
+DataSphere Python Console:
+
+```python
+import subprocess
+for step in ("preflight", "plan", "baseline", "anatomical", "boundary-hd", "topology"):
+    subprocess.run(["bash", "scripts/3d/train.sh", step], check=True)
+```
+
+Other folds: `FOLD=1 bash scripts/3d/train.sh baseline`
 
 ## Data layout
 
 ```
 nnUNet_raw/Dataset001_LiverTumor/
 ├── dataset.json
-├── imagesTr/          # LiTS train (131)
+├── imagesTr/    # 131 cases
 ├── labelsTr/
-├── imagesTs/          # 3D-IRCADb-01 test (20): ircad_XX_0000.nii.gz
-└── labelsTs/          # GT for metrics: ircad_XX.nii.gz
+├── imagesTs/    # IRCAD test
+└── labelsTs/
 ```
 
-Labels: background `0`, liver `1`, tumor `2`.
+Labels: `0` background, `1` liver, `2` tumor.
 
-Convert IRCAD from the official zip:
+## What is in git vs not
 
-```bash
-.venv/bin/python scripts/data/convert_3dircadb1_to_nnunet.py \
-  --zip /mnt/c/Users/kasid/Downloads/3Dircadb1.zip
-```
+| In git (push) | Not in git (upload / generate on DataSphere) |
+|---------------|-----------------------------------------------|
+| `src/3d/` custom trainers & losses | `.venv/` — recreate with `pip install` |
+| `scripts/3d/train.sh`, `train_3d_arm.sh`, `resolve_python.sh`, `run_nnunet_with_local_3d_trainers.py` | `nnUNet_raw/` (~18 GB) — upload separately |
+| `requirements.txt` | `nnUNet_preprocessed/` — run `train.sh plan` |
+| | `nnUNet_results/`, `results_3d_*` — training outputs |
+| | `*.pth` checkpoints |
 
-## Train
-
-```bash
-# once
-bash scripts/3d/preprocess_nnunet_3d.sh
-
-# fold 0 (default)
-bash scripts/3d/train_3d_baseline.sh --skip-preprocess
-bash scripts/3d/train_3d_anatomical.sh --skip-preprocess
-bash scripts/3d/train_3d_boundary_hd.sh --skip-preprocess
-bash scripts/3d/train_3d_topology.sh --skip-preprocess
-
-# later: other folds
-FOLD=1 bash scripts/3d/train_3d_baseline.sh --skip-preprocess
-```
-
-Post-training fold validation uses `checkpoint_best.pth` by default
-(`NNUNET_VALIDATION_WITH_BEST=0` to use the final checkpoint).
-
-## Scripts
-
-### `scripts/3d/`
-
-| Script | Purpose |
-|--------|---------|
-| `preprocess_nnunet_3d.sh` | plan + preprocess |
-| `train_3d_baseline.sh` | arm 1 |
-| `train_3d_anatomical.sh` | arm 2 |
-| `train_3d_boundary_hd.sh` | arm 3 |
-| `train_3d_topology.sh` | arm 4 |
-| `train_3d_arm.sh` | shared launcher |
-| `run_nnunet_with_local_3d_trainers.py` | registers local trainers |
-
-### `scripts/visualization/`
-
-Matplotlib helpers under `visualizations/`.
-
-### Root `scripts/`
-
-`evaluate_segmentations.py` — Dice / IoU vs reference labels.
-
-## Code style
-
-```bash
-.venv/bin/flake8 src scripts
-```
-
-## Repository tree
-
-```
-liver-tumor-segmentation/
-├── README.md
-├── requirements.txt
-├── src/3d/
-│   ├── baseline/
-│   ├── anatomical/
-│   ├── boundary_hd/
-│   ├── topology/
-│   ├── common/
-│   └── nnunetv2/training/nnUNetTrainer/
-├── scripts/3d/
-└── nnUNet_* / results_3d_*   # local; gitignored
-```
+`nnunetv2` itself installs from PyPI into `.venv`; only our **wrappers** (`src/3d/nnunetv2/training/nnUNetTrainer/nnUNetTrainer_500_*.py` + loss code) are in the repo.
 
 ## License
 
